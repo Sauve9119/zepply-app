@@ -1,0 +1,1042 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "name": "Rahul Sharma",
+      "email": "rahul@example.com",
+      "phone": "9876543210",
+      "password": "$2b$10$yQvqfO3d9/vRrBMaz.g1necSOL7j1ub0pbRNlkxX0p1WciH9j8hQO",
+      "role": "customer",
+      "loyalty_points": 2420,
+      "tier": "silver",
+      "referral_code": "ZEP1001",
+      "referred_by": null,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.761Z"
+    },
+    {
+      "id": "u2",
+      "name": "Gupta Store Owner",
+      "email": "gupta@example.com",
+      "phone": "9876500001",
+      "password": "$2b$10$yQvqfO3d9/vRrBMaz.g1necSOL7j1ub0pbRNlkxX0p1WciH9j8hQO",
+      "role": "shopowner",
+      "loyalty_points": 0,
+      "tier": "bronze",
+      "referral_code": "ZEP1002",
+      "referred_by": null,
+      "created_at": "2024-01-10T08:00:00Z",
+      "updated_at": "2026-06-18T12:45:02.066Z"
+    },
+    {
+      "id": "u3",
+      "name": "Rajan Kumar",
+      "email": "rajan@example.com",
+      "phone": "9876543211",
+      "password": "$2b$10$yQvqfO3d9/vRrBMaz.g1necSOL7j1ub0pbRNlkxX0p1WciH9j8hQO",
+      "role": "delivery",
+      "loyalty_points": 4875,
+      "tier": "gold",
+      "referral_code": "ZEP1003",
+      "referred_by": null,
+      "created_at": "2024-01-12T09:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.664Z"
+    },
+    {
+      "id": "ud54e3df9f6cf",
+      "name": "Anita Singh",
+      "email": "anita1781926117338@test.com",
+      "phone": "9000000099",
+      "password": "$2b$10$V.l28t5HkzL.BeSQQqVPEOg82a2J5M1x/T9gpLAqmyNr/SIGJwYeS",
+      "role": "customer",
+      "loyalty_points": 100,
+      "tier": "bronze",
+      "referral_code": "ZEP6189",
+      "referred_by": null,
+      "created_at": "2026-06-20T03:28:37.425Z"
+    }
+  ],
+  "shops": [
+    {
+      "id": "s1",
+      "owner_id": "u2",
+      "name": "Gupta Kirana",
+      "category": "Grocery",
+      "description": "Premium quality groceries since 1995",
+      "emoji": "🌾",
+      "address": "12, Shastri Nagar, Jodhpur",
+      "lat": 26.298,
+      "lng": 73.018,
+      "rating": 5,
+      "total_reviews": 2,
+      "is_open": true,
+      "delivery_time": "12 min",
+      "min_order": 100,
+      "delivery_charge": 25,
+      "gst": "08ABCDE1234F1Z5",
+      "created_at": "2024-01-10T08:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.560Z"
+    },
+    {
+      "id": "s2",
+      "owner_id": "u2",
+      "name": "Lakshmi General",
+      "category": "Grocery",
+      "description": "Quality groceries and household items",
+      "emoji": "🛒",
+      "address": "45, Civil Lines, Jodhpur",
+      "lat": 26.296,
+      "lng": 73.022,
+      "rating": 5,
+      "total_reviews": 1,
+      "is_open": true,
+      "delivery_time": "15 min",
+      "min_order": 150,
+      "delivery_charge": 25,
+      "gst": "08XYZAB5678G2Z3",
+      "created_at": "2024-01-11T08:00:00Z",
+      "updated_at": "2026-06-19T05:54:30.732Z"
+    },
+    {
+      "id": "s3",
+      "owner_id": "u2",
+      "name": "Shyam Hardware",
+      "category": "Hardware",
+      "description": "All hardware, plumbing and painting needs",
+      "emoji": "🔧",
+      "address": "78, Industrial Area, Jodhpur",
+      "lat": 26.302,
+      "lng": 73.015,
+      "rating": 4,
+      "total_reviews": 1,
+      "is_open": true,
+      "delivery_time": "18 min",
+      "min_order": 200,
+      "delivery_charge": 40,
+      "gst": "08LMNOP9012H3Z7",
+      "created_at": "2024-01-09T08:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.760Z"
+    },
+    {
+      "id": "s4",
+      "owner_id": "u2",
+      "name": "Saraswati Stationery",
+      "category": "Stationery",
+      "description": "Books, pens, paper and office supplies",
+      "emoji": "✏️",
+      "address": "22, School Road, Jodhpur",
+      "lat": 26.299,
+      "lng": 73.025,
+      "rating": 5,
+      "total_reviews": 1,
+      "is_open": true,
+      "delivery_time": "14 min",
+      "min_order": 50,
+      "delivery_charge": 20,
+      "gst": "08QRSTU3456I4Z1",
+      "created_at": "2024-01-08T08:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.756Z"
+    },
+    {
+      "id": "s5",
+      "owner_id": "u2",
+      "name": "Aggarwal Wholesale",
+      "category": "Wholesale",
+      "description": "Bulk grocery and FMCG wholesale supply",
+      "emoji": "📦",
+      "address": "Mandore Road, Jodhpur",
+      "lat": 26.294,
+      "lng": 73.02,
+      "rating": 4.4,
+      "total_reviews": 67,
+      "is_open": true,
+      "delivery_time": "22 min",
+      "min_order": 500,
+      "delivery_charge": 0,
+      "gst": "08VWXYZ7890J5Z9",
+      "created_at": "2024-01-07T08:00:00Z"
+    },
+    {
+      "id": "sb4605a2f47b9",
+      "owner_id": "u2",
+      "name": "Meera Dairy",
+      "category": "Dairy",
+      "description": "",
+      "emoji": "🏪",
+      "address": "Paota Jodhpur",
+      "lat": 26.301,
+      "lng": 73.02,
+      "rating": 0,
+      "total_reviews": 0,
+      "is_open": true,
+      "delivery_time": "20 min",
+      "min_order": 100,
+      "delivery_charge": 25,
+      "gst": "",
+      "created_at": "2026-06-20T03:28:37.550Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "shop_id": "s1",
+      "name": "Toor Dal",
+      "category": "Pulses",
+      "unit": "1 kg",
+      "price": 125,
+      "mrp": 145,
+      "emoji": "🫘",
+      "discount": 14,
+      "stock": 43,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.593Z"
+    },
+    {
+      "id": "p2",
+      "shop_id": "s1",
+      "name": "Chana Dal",
+      "category": "Pulses",
+      "unit": "500 g",
+      "price": 65,
+      "mrp": 78,
+      "emoji": "🌕",
+      "discount": 17,
+      "stock": 35,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p3",
+      "shop_id": "s1",
+      "name": "Mustard Oil",
+      "category": "Oil",
+      "unit": "1 L",
+      "price": 185,
+      "mrp": 185,
+      "emoji": "🫙",
+      "discount": 0,
+      "stock": 20,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p4",
+      "shop_id": "s1",
+      "name": "Atta Premium",
+      "category": "Flour",
+      "unit": "5 kg",
+      "price": 210,
+      "mrp": 230,
+      "emoji": "🌾",
+      "discount": 9,
+      "stock": 30,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p5",
+      "shop_id": "s2",
+      "name": "Basmati Rice",
+      "category": "Rice",
+      "unit": "1 kg",
+      "price": 95,
+      "mrp": 110,
+      "emoji": "🍚",
+      "discount": 14,
+      "stock": 55,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.594Z"
+    },
+    {
+      "id": "p6",
+      "shop_id": "s2",
+      "name": "Brown Rice",
+      "category": "Rice",
+      "unit": "1 kg",
+      "price": 85,
+      "mrp": 85,
+      "emoji": "🌾",
+      "discount": 0,
+      "stock": 25,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p7",
+      "shop_id": "s2",
+      "name": "Detergent Powder",
+      "category": "Home",
+      "unit": "2 kg",
+      "price": 220,
+      "mrp": 260,
+      "emoji": "🧺",
+      "discount": 15,
+      "stock": 18,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p8",
+      "shop_id": "s2",
+      "name": "Fresh Tomatoes",
+      "category": "Vegetables",
+      "unit": "500 g",
+      "price": 25,
+      "mrp": 30,
+      "emoji": "🍅",
+      "discount": 17,
+      "stock": 98,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-19T05:54:30.634Z"
+    },
+    {
+      "id": "p9",
+      "shop_id": "s3",
+      "name": "Paint Brush Set",
+      "category": "Painting",
+      "unit": "5 pcs",
+      "price": 180,
+      "mrp": 220,
+      "emoji": "🖌️",
+      "discount": 18,
+      "stock": 14,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.612Z"
+    },
+    {
+      "id": "p10",
+      "shop_id": "s3",
+      "name": "Drill Bit Set",
+      "category": "Tools",
+      "unit": "10 pcs",
+      "price": 350,
+      "mrp": 400,
+      "emoji": "🔩",
+      "discount": 13,
+      "stock": 10,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p11",
+      "shop_id": "s3",
+      "name": "PVC Pipe 1\"",
+      "category": "Plumbing",
+      "unit": "1 mtr",
+      "price": 45,
+      "mrp": 50,
+      "emoji": "🪛",
+      "discount": 10,
+      "stock": 200,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p12",
+      "shop_id": "s3",
+      "name": "Fevicol SH",
+      "category": "Adhesive",
+      "unit": "500 g",
+      "price": 120,
+      "mrp": 130,
+      "emoji": "🧲",
+      "discount": 8,
+      "stock": 22,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p13",
+      "shop_id": "s4",
+      "name": "Classmate Notebook",
+      "category": "Books",
+      "unit": "4-pack",
+      "price": 120,
+      "mrp": 140,
+      "emoji": "📓",
+      "discount": 14,
+      "stock": 37,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.601Z"
+    },
+    {
+      "id": "p14",
+      "shop_id": "s4",
+      "name": "Gel Pen Set",
+      "category": "Pens",
+      "unit": "10 pcs",
+      "price": 75,
+      "mrp": 90,
+      "emoji": "✒️",
+      "discount": 17,
+      "stock": 54,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.602Z"
+    },
+    {
+      "id": "p15",
+      "shop_id": "s4",
+      "name": "A4 Paper Ream",
+      "category": "Paper",
+      "unit": "500 sheets",
+      "price": 280,
+      "mrp": 310,
+      "emoji": "📄",
+      "discount": 10,
+      "stock": 30,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p16",
+      "shop_id": "s4",
+      "name": "Stapler",
+      "category": "Office",
+      "unit": "1 pc",
+      "price": 95,
+      "mrp": 110,
+      "emoji": "📎",
+      "discount": 14,
+      "stock": 12,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p17",
+      "shop_id": "s5",
+      "name": "Sugar",
+      "category": "Wholesale",
+      "unit": "50 kg bag",
+      "price": 1950,
+      "mrp": 2100,
+      "emoji": "🍬",
+      "discount": 7,
+      "stock": 500,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p18",
+      "shop_id": "s5",
+      "name": "Tea Leaves",
+      "category": "Wholesale",
+      "unit": "10 kg",
+      "price": 1400,
+      "mrp": 1600,
+      "emoji": "🍵",
+      "discount": 13,
+      "stock": 100,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p19",
+      "shop_id": "s5",
+      "name": "Chilli Powder",
+      "category": "Wholesale",
+      "unit": "5 kg",
+      "price": 550,
+      "mrp": 620,
+      "emoji": "🌶️",
+      "discount": 11,
+      "stock": 80,
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "p4eb7e3d0bfdd",
+      "shop_id": "s1",
+      "name": "Sunflower Oil",
+      "category": "Oil",
+      "unit": "1L",
+      "price": 135,
+      "mrp": 165,
+      "emoji": "🌻",
+      "discount": 18,
+      "stock": 20,
+      "is_active": false,
+      "created_at": "2026-06-20T03:28:37.582Z",
+      "updated_at": "2026-06-20T03:28:37.587Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord1",
+      "user_id": "u1",
+      "status": "delivered",
+      "total": 420,
+      "delivery_charge": 0,
+      "discount": 0,
+      "loyalty_earned": 42,
+      "delivery_partner_id": "u3",
+      "created_at": "2024-01-16T18:30:00Z",
+      "delivered_at": "2024-01-16T19:05:00Z",
+      "address": "Flat 4B, Shastri Nagar, Jodhpur",
+      "items": [
+        {
+          "product_id": "p1",
+          "shop_id": "s1",
+          "qty": 2,
+          "price": 125
+        },
+        {
+          "product_id": "p5",
+          "shop_id": "s2",
+          "qty": 1,
+          "price": 95
+        }
+      ]
+    },
+    {
+      "id": "ord2",
+      "user_id": "u1",
+      "status": "delivered",
+      "total": 195,
+      "delivery_charge": 20,
+      "discount": 0,
+      "loyalty_earned": 19,
+      "delivery_partner_id": "u3",
+      "created_at": "2024-01-14T15:00:00Z",
+      "delivered_at": "2024-01-14T15:35:00Z",
+      "address": "Flat 4B, Shastri Nagar, Jodhpur",
+      "items": [
+        {
+          "product_id": "p13",
+          "shop_id": "s4",
+          "qty": 1,
+          "price": 120
+        },
+        {
+          "product_id": "p14",
+          "shop_id": "s4",
+          "qty": 1,
+          "price": 75
+        }
+      ]
+    },
+    {
+      "id": "ordc7b8e1d11b4c",
+      "user_id": "u1",
+      "items": [
+        {
+          "product_id": "p1",
+          "shop_id": "s1",
+          "qty": 2,
+          "price": 125,
+          "total": 250
+        },
+        {
+          "product_id": "p5",
+          "shop_id": "s2",
+          "qty": 1,
+          "price": 95,
+          "total": 95
+        }
+      ],
+      "address": "Flat 4B, Shastri Nagar, Jodhpur",
+      "status": "delivered",
+      "subtotal": 345,
+      "delivery_charge": 0,
+      "discount": 50,
+      "coupon_used": "SAVE50",
+      "total": 295,
+      "loyalty_earned": 29,
+      "payment_method": "cod",
+      "delivery_partner_id": "u3",
+      "estimated_delivery": "25-35 min",
+      "created_at": "2026-06-20T03:28:37.592Z",
+      "updated_at": "2026-06-20T03:28:37.662Z",
+      "picked_up_at": "2026-06-20T03:28:37.656Z",
+      "delivered_at": "2026-06-20T03:28:37.662Z"
+    },
+    {
+      "id": "ord5b54dd743547",
+      "user_id": "u1",
+      "items": [
+        {
+          "product_id": "p13",
+          "shop_id": "s4",
+          "qty": 2,
+          "price": 120,
+          "total": 240
+        },
+        {
+          "product_id": "p14",
+          "shop_id": "s4",
+          "qty": 1,
+          "price": 75,
+          "total": 75
+        }
+      ],
+      "address": "22 School Road, Jodhpur",
+      "status": "confirmed",
+      "subtotal": 315,
+      "delivery_charge": 0,
+      "discount": 0,
+      "coupon_used": null,
+      "total": 315,
+      "loyalty_earned": 31,
+      "payment_method": "cod",
+      "delivery_partner_id": "u3",
+      "estimated_delivery": "25-35 min",
+      "created_at": "2026-06-20T03:28:37.599Z"
+    },
+    {
+      "id": "orddf012ea86916",
+      "user_id": "u1",
+      "items": [
+        {
+          "product_id": "p9",
+          "shop_id": "s3",
+          "qty": 1,
+          "price": 180,
+          "total": 180
+        }
+      ],
+      "address": "Hardware Colony Jodhpur",
+      "status": "confirmed",
+      "subtotal": 180,
+      "delivery_charge": 25,
+      "discount": 0,
+      "coupon_used": null,
+      "total": 205,
+      "loyalty_earned": 20,
+      "payment_method": "cod",
+      "delivery_partner_id": "u3",
+      "estimated_delivery": "25-35 min",
+      "created_at": "2026-06-20T03:28:37.612Z"
+    }
+  ],
+  "loyalty_points": [
+    {
+      "id": "lp1",
+      "user_id": "u1",
+      "points": 42,
+      "type": "earn",
+      "description": "Order ord1",
+      "created_at": "2024-01-16T19:05:00Z"
+    },
+    {
+      "id": "lp2",
+      "user_id": "u1",
+      "points": 19,
+      "type": "earn",
+      "description": "Order ord2",
+      "created_at": "2024-01-14T15:35:00Z"
+    },
+    {
+      "id": "lp3",
+      "user_id": "u3",
+      "points": 4820,
+      "type": "earn",
+      "description": "Total delivery coins",
+      "created_at": "2024-01-16T19:05:00Z"
+    },
+    {
+      "id": "lp905734a31d5a",
+      "user_id": "u1",
+      "points": 29,
+      "type": "earn",
+      "description": "Order ordc7b8e1d11b4c",
+      "created_at": "2026-06-20T03:28:37.594Z"
+    },
+    {
+      "id": "lp694d330cf105",
+      "user_id": "u1",
+      "points": 31,
+      "type": "earn",
+      "description": "Order ord5b54dd743547",
+      "created_at": "2026-06-20T03:28:37.604Z"
+    },
+    {
+      "id": "lp2b99ad164cd5",
+      "user_id": "u1",
+      "points": 20,
+      "type": "earn",
+      "description": "Order orddf012ea86916",
+      "created_at": "2026-06-20T03:28:37.613Z"
+    },
+    {
+      "id": "lp97ee9356794f",
+      "user_id": "u1",
+      "points": 200,
+      "type": "spin",
+      "description": "Spin & Win: 200 Coins",
+      "created_at": "2026-06-20T03:28:37.686Z"
+    },
+    {
+      "id": "lp10aaf5f6badf",
+      "user_id": "u1",
+      "points": 50,
+      "type": "spin",
+      "description": "Spin & Win: 50 Coins",
+      "created_at": "2026-06-20T03:28:37.692Z"
+    },
+    {
+      "id": "lpa137b25ccb1d",
+      "user_id": "u1",
+      "points": 25,
+      "type": "review",
+      "description": "text review bonus",
+      "created_at": "2026-06-20T03:28:37.714Z"
+    },
+    {
+      "id": "lpfe442a9f8d47",
+      "user_id": "u1",
+      "points": 50,
+      "type": "review",
+      "description": "photo review bonus",
+      "created_at": "2026-06-20T03:28:37.717Z"
+    },
+    {
+      "id": "lpbf0afed56a61",
+      "user_id": "u1",
+      "points": 100,
+      "type": "review",
+      "description": "video review bonus",
+      "created_at": "2026-06-20T03:28:37.719Z"
+    },
+    {
+      "id": "lp4914dc3aff25",
+      "user_id": "u1",
+      "points": -500,
+      "type": "redeem",
+      "description": "Redeemed: ₹50 off coupon",
+      "created_at": "2026-06-20T03:28:37.723Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "n1",
+      "user_id": "u1",
+      "title": "Order Delivered!",
+      "body": "Your order #ord1 has been delivered. Rate your experience.",
+      "read": true,
+      "created_at": "2024-01-16T19:05:00Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n2",
+      "user_id": "u1",
+      "title": "Flash Sale Live!",
+      "body": "Up to 40% off on groceries at Gupta Kirana. Shop now!",
+      "read": true,
+      "created_at": "2024-01-16T10:00:00Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n3",
+      "user_id": "u1",
+      "title": "ZepCoins Earned",
+      "body": "You earned 42 ZepCoins on your last order!",
+      "read": true,
+      "created_at": "2024-01-16T19:06:00Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n06247a0d2ae8",
+      "user_id": "ud54e3df9f6cf",
+      "title": "Welcome to Zepply! 🎉",
+      "body": "Welcome Anita Singh! 100 ZepCoins added as welcome bonus.",
+      "read": false,
+      "created_at": "2026-06-20T03:28:37.426Z"
+    },
+    {
+      "id": "n79d5e532901d",
+      "user_id": "u1",
+      "title": "Order Confirmed! 🎉",
+      "body": "Order #ordc7b8e1d11b4c placed. You earned 29 ZepCoins!",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.596Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n46d699375e79",
+      "user_id": "u3",
+      "title": "New Delivery Job! 📦",
+      "body": "Order #ordc7b8e1d11b4c — pick up from 2 store(s)",
+      "read": false,
+      "created_at": "2026-06-20T03:28:37.596Z"
+    },
+    {
+      "id": "ncf3abfe6fc77",
+      "user_id": "u1",
+      "title": "Order Confirmed! 🎉",
+      "body": "Order #ord5b54dd743547 placed. You earned 31 ZepCoins!",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.607Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "nd03e69b9f169",
+      "user_id": "u3",
+      "title": "New Delivery Job! 📦",
+      "body": "Order #ord5b54dd743547 — pick up from 1 store(s)",
+      "read": false,
+      "created_at": "2026-06-20T03:28:37.609Z"
+    },
+    {
+      "id": "n72af6f65605f",
+      "user_id": "u1",
+      "title": "Order Confirmed! 🎉",
+      "body": "Order #orddf012ea86916 placed. You earned 20 ZepCoins!",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.614Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n3a6edf1438bf",
+      "user_id": "u3",
+      "title": "New Delivery Job! 📦",
+      "body": "Order #orddf012ea86916 — pick up from 1 store(s)",
+      "read": false,
+      "created_at": "2026-06-20T03:28:37.614Z"
+    },
+    {
+      "id": "nf52756bfefc1",
+      "user_id": "u1",
+      "title": "Your order is being prepared 🍳",
+      "body": "Order #ordc7b8e1d11b4c",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.654Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "nc51f0423b229",
+      "user_id": "u1",
+      "title": "Order picked up from store 📦",
+      "body": "Order #ordc7b8e1d11b4c",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.656Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "n4956ec300091",
+      "user_id": "u1",
+      "title": "Order out for delivery! 🏍️",
+      "body": "Order #ordc7b8e1d11b4c",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.659Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    },
+    {
+      "id": "nb2babc02c76f",
+      "user_id": "u1",
+      "title": "Order delivered! Rate your experience ⭐",
+      "body": "Order #ordc7b8e1d11b4c",
+      "read": true,
+      "created_at": "2026-06-20T03:28:37.662Z",
+      "updated_at": "2026-06-20T03:28:37.731Z"
+    }
+  ],
+  "delivery_partners": [
+    {
+      "id": "dp1",
+      "user_id": "u3",
+      "vehicle": "Bajaj Pulsar",
+      "reg_number": "RJ14 YY 5678",
+      "license": "RJ-DL-2019-1234567",
+      "aadhar": "XXXX XXXX 1234",
+      "status": "offline",
+      "rating": 4.9,
+      "total_deliveries": 313,
+      "total_earnings": 28505,
+      "coins": 4820,
+      "badge": "gold",
+      "created_at": "2024-01-12T09:00:00Z",
+      "current_lat": 26.298,
+      "current_lng": 73.018,
+      "updated_at": "2026-06-20T03:28:37.849Z"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev5dcf34a3b0c6",
+      "user_id": "u1",
+      "order_id": "ord5b54dd743547",
+      "shop_id": "s4",
+      "rating": 5,
+      "comment": "Amazing stationery, very well packed and delivered fast!",
+      "tags": [
+        "Fast delivery",
+        "Good packaging"
+      ],
+      "review_type": "text",
+      "created_at": "2026-06-20T03:28:37.755Z"
+    },
+    {
+      "id": "revbd32a678da22",
+      "user_id": "u1",
+      "order_id": "orddf012ea86916",
+      "shop_id": "s3",
+      "rating": 4,
+      "comment": "Good hardware tools, drill bits are excellent quality.",
+      "tags": [
+        "Good quality"
+      ],
+      "review_type": "photo",
+      "created_at": "2026-06-20T03:28:37.759Z"
+    }
+  ],
+  "promotions": [
+    {
+      "id": "pr1",
+      "shop_id": "s1",
+      "title": "Weekend Flash Sale",
+      "type": "percentage",
+      "value": 20,
+      "min_order": 0,
+      "applicable_to": "Pulses",
+      "status": "active",
+      "ends_at": "2024-01-21T23:59:59Z",
+      "created_at": "2024-01-15T00:00:00Z"
+    },
+    {
+      "id": "pr896fc10fad2b",
+      "shop_id": "s1",
+      "title": "Monsoon Special 30%",
+      "type": "percentage",
+      "value": 30,
+      "min_order": 200,
+      "applicable_to": "all",
+      "status": "active",
+      "ends_at": "2025-09-30T23:59:59Z",
+      "created_at": "2026-06-20T03:28:37.787Z",
+      "updated_at": "2026-06-20T03:28:37.792Z"
+    }
+  ],
+  "referrals": [],
+  "spin_history": [
+    {
+      "id": "sp374f3263a1da",
+      "user_id": "u1",
+      "prize": "200 Coins",
+      "type": "coins",
+      "value": 200,
+      "date": "2026-06-20",
+      "created_at": "2026-06-20T03:28:37.686Z"
+    },
+    {
+      "id": "sp946e2a04d8a6",
+      "user_id": "u1",
+      "prize": "₹25 Off Coupon",
+      "type": "coupon",
+      "value": 25,
+      "date": "2026-06-20",
+      "created_at": "2026-06-20T03:28:37.689Z"
+    },
+    {
+      "id": "sp023fd623f0a2",
+      "user_id": "u1",
+      "prize": "50 Coins",
+      "type": "coins",
+      "value": 50,
+      "date": "2026-06-20",
+      "created_at": "2026-06-20T03:28:37.692Z"
+    },
+    {
+      "id": "sp7f7cc997dcef",
+      "user_id": "u1",
+      "prize": "Free Delivery",
+      "type": "free_delivery",
+      "value": 1,
+      "date": "2026-06-21",
+      "created_at": "2026-06-21T00:01:38.826Z"
+    }
+  ],
+  "challenges": [
+    {
+      "id": "ch1",
+      "title": "Shop 5 days in a row",
+      "reward_points": 500,
+      "target": 5,
+      "type": "streak"
+    },
+    {
+      "id": "ch2",
+      "title": "Spend ₹2000 this week",
+      "reward_points": 300,
+      "target": 2000,
+      "type": "spend"
+    },
+    {
+      "id": "ch3",
+      "title": "Order from 3 new stores",
+      "reward_points": 400,
+      "target": 3,
+      "type": "new_stores"
+    },
+    {
+      "id": "ch4",
+      "title": "Rate 5 deliveries",
+      "reward_points": 150,
+      "target": 5,
+      "type": "ratings"
+    },
+    {
+      "id": "ch5",
+      "title": "Refer 2 friends",
+      "reward_points": 600,
+      "target": 2,
+      "type": "referrals"
+    }
+  ],
+  "wishlist": [
+    {
+      "id": "wld8ac764e04f8",
+      "user_id": "u1",
+      "product_id": "p3",
+      "created_at": "2026-06-20T03:28:37.736Z"
+    },
+    {
+      "id": "wl4fcdc5c122b6",
+      "user_id": "u1",
+      "product_id": "p12",
+      "created_at": "2026-06-20T03:28:37.743Z"
+    }
+  ],
+  "coupons": [
+    {
+      "code": "SAVE50",
+      "type": "flat",
+      "value": 50,
+      "min_order": 200,
+      "max_uses": 1000,
+      "used": 0,
+      "active": true
+    },
+    {
+      "code": "KART10",
+      "type": "percentage",
+      "value": 10,
+      "min_order": 100,
+      "max_uses": 5000,
+      "used": 0,
+      "active": true
+    },
+    {
+      "code": "FIRST100",
+      "type": "flat",
+      "value": 100,
+      "min_order": 400,
+      "max_uses": 500,
+      "used": 0,
+      "active": true
+    },
+    {
+      "code": "WELCOME",
+      "type": "flat",
+      "value": 75,
+      "min_order": 150,
+      "max_uses": 999,
+      "used": 0,
+      "active": true
+    }
+  ]
+}
