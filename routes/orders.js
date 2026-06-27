@@ -4,20 +4,46 @@ const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
 
+// GET /api/orders
 router.get('/', auth, (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
   let orders;
+
   if (req.user.role === 'customer') {
+    // Customer: sirf apne orders
     orders = db.find('orders', { user_id: req.user.id });
-  } else if (req.user.role === 'delivery') {
-    orders = db.find('orders', { delivery_partner_id: req.user.id });
+
   } else if (req.user.role === 'shopowner') {
+    // FIX: Shopowner ko UNKI SHOP ke saare orders dikhne chahiye
+    // Chahe customer koi bhi ho
     const myShops = db.find('shops', { owner_id: req.user.id }).map(s => s.id);
-    orders = db.findAll('orders').filter(o => o.items && o.items.some(i => myShops.includes(i.shop_id)));
-  } else { orders = []; }
+    orders = db.findAll('orders').filter(o =>
+      o.items && o.items.some(i => myShops.includes(i.shop_id))
+    );
+
+  } else if (req.user.role === 'delivery') {
+    // FIX: Delivery ko 2 tarah ke orders dikhne chahiye:
+    // 1. Unke assigned orders (jo unhone accept kiye)
+    // 2. Available (unassigned) orders jo koi bhi accept kar sakta hai
+    const myOrders = db.find('orders', { delivery_partner_id: req.user.id });
+    const availableOrders = db.findAll('orders').filter(o =>
+      !o.delivery_partner_id &&
+      !['delivered', 'cancelled'].includes(o.status)
+    );
+    // Dono merge karo, duplicates hatao
+    const seen = new Set();
+    orders = [...myOrders, ...availableOrders].filter(o => {
+      if (seen.has(o.id)) return false;
+      seen.add(o.id);
+      return true;
+    });
+  } else {
+    orders = [];
+  }
 
   if (status) orders = orders.filter(o => o.status === status);
   orders = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
   orders = orders.map(o => {
     const user = db.findById('users', o.user_id);
     const items = (o.items || []).map(item => {
@@ -25,23 +51,36 @@ router.get('/', auth, (req, res) => {
       const shop = db.findById('shops', item.shop_id);
       return { ...item, product_name: product?.name, product_emoji: product?.emoji, shop_name: shop?.name };
     });
-    return { ...o, customer_name: user?.name, customer_phone: user?.phone, items };
+    return {
+      ...o,
+      customer_name: user?.name,
+      customer_phone: user?.phone,
+      items,
+      // Delivery ko batao ki ye order available hai ya unka assigned hai
+      is_available: !o.delivery_partner_id,
+      is_mine: o.delivery_partner_id === req.user.id
+    };
   });
+
   const total = orders.length;
   const start = (parseInt(page) - 1) * parseInt(limit);
   res.json({ success: true, orders: orders.slice(start, start + parseInt(limit)), total, page: parseInt(page), pages: Math.ceil(total / limit) });
 });
 
+// GET /api/orders/:id
 router.get('/:id', auth, (req, res) => {
   const order = db.findById('orders', req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
   if (req.user.role === 'customer' && order.user_id !== req.user.id)
     return res.status(403).json({ success: false, message: 'Access denied' });
+
   if (req.user.role === 'shopowner') {
     const myShops = db.find('shops', { owner_id: req.user.id }).map(s => s.id);
     if (!order.items || !order.items.some(i => myShops.includes(i.shop_id)))
       return res.status(403).json({ success: false, message: 'Access denied' });
   }
+
   const items = (order.items || []).map(item => {
     const product = db.findById('products', item.product_id);
     const shop = db.findById('shops', item.shop_id);
@@ -49,9 +88,43 @@ router.get('/:id', auth, (req, res) => {
   });
   const user = db.findById('users', order.user_id);
   const partner = order.delivery_partner_id ? db.findById('users', order.delivery_partner_id) : null;
+
   res.json({ success: true, order: { ...order, items, customer_name: user?.name, customer_phone: user?.phone, delivery_partner_name: partner?.name, delivery_partner_phone: partner?.phone } });
 });
 
+// POST /api/orders/:id/accept — Delivery partner order accept kare
+// Jo pehle accept kare usko milega
+router.post('/:id/accept', auth, requireRole('delivery'), (req, res) => {
+  const order = db.findById('orders', req.params.id);
+  if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+  // Agar already kisi ne accept kar liya
+  if (order.delivery_partner_id)
+    return res.status(409).json({ success: false, message: 'Ye order pehle hi kisi aur ne accept kar liya!' });
+
+  if (['delivered', 'cancelled'].includes(order.status))
+    return res.status(400).json({ success: false, message: 'Ye order available nahi hai' });
+
+  // Assign this delivery partner
+  const updated = db.updateById('orders', req.params.id, {
+    delivery_partner_id: req.user.id,
+    status: 'preparing'
+  });
+
+  // Customer ko notify karo
+  db.insert('notifications', {
+    id: 'n' + uuidv4().slice(0, 8),
+    user_id: order.user_id,
+    title: 'Delivery Partner Assign Ho Gaya! 🏍️',
+    body: `${req.user.name} aapka order deliver karenge`,
+    read: false,
+    created_at: new Date().toISOString()
+  });
+
+  res.json({ success: true, order: updated, message: 'Order accept kar liya! Customer ko notify kar diya.' });
+});
+
+// POST /api/orders — place new order
 router.post('/', auth, requireRole('customer'), (req, res) => {
   try {
     const { items, address, coupon_code, payment_method = 'cod' } = req.body;
@@ -60,6 +133,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
 
     let subtotal = 0;
     const enrichedItems = [];
+
     for (const item of items) {
       const product = db.findById('products', item.product_id);
       if (!product || !product.is_active)
@@ -72,6 +146,8 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     }
 
     const delivery_charge = subtotal >= 300 ? 0 : 25;
+
+    // Coupon validate
     let discount = 0, coupon_used = null;
     if (coupon_code) {
       const coupon = db.findAll('coupons').find(c => c.code === coupon_code && c.active);
@@ -80,7 +156,6 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
           return res.status(400).json({ success: false, message: `Minimum order ₹${coupon.min_order} chahiye` });
         if (coupon.max_uses && (coupon.used || 0) >= coupon.max_uses)
           return res.status(400).json({ success: false, message: 'Coupon limit khatam ho gaya' });
-        // FIX: ek user ek coupon ek baar hi use kar sakta hai
         const alreadyUsed = db.findAll('orders').some(o => o.coupon_used === coupon_code && o.user_id === req.user.id && o.status !== 'cancelled');
         if (alreadyUsed)
           return res.status(400).json({ success: false, message: 'Aap ye coupon pehle use kar chuke hain' });
@@ -94,38 +169,42 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     const loyalty_earned = Math.floor(total / 10);
     const orderId = 'ord' + uuidv4().slice(0, 8);
 
-    // Delivery partner assign — active pehle, phir koi bhi verified partner
-    let partners = db.find('delivery_partners', { status: 'active' });
-    if (!partners.length) partners = db.findAll('delivery_partners').filter(p => !['suspended', 'rejected', 'pending_verification'].includes(p.status));
-    const assigned_partner = partners.length ? partners[0].user_id : null;
-
+    // FIX: Order unassigned rakho — delivery partner khud accept karega
     const order = {
       id: orderId, user_id: req.user.id, items: enrichedItems, address,
       status: 'confirmed', subtotal, delivery_charge, discount, coupon_used,
       total, loyalty_earned, payment_method,
       payment_status: payment_method === 'cod' ? 'pending' : 'awaiting_payment',
-      delivery_partner_id: assigned_partner,
+      delivery_partner_id: null, // Koi assign nahi — delivery wale khud accept karenge
       estimated_delivery: '25-35 min',
       created_at: new Date().toISOString()
     };
+
     db.insert('orders', order);
 
+    // Stock deduct karo
     for (const item of enrichedItems) {
       const product = db.findById('products', item.product_id);
       db.updateById('products', item.product_id, { stock: product.stock - item.qty });
     }
 
+    // Loyalty points
     db.increment('users', req.user.id, 'loyalty_points', loyalty_earned);
     db.insert('loyalty_points', { id: 'lp' + uuidv4().slice(0, 8), user_id: req.user.id, points: loyalty_earned, type: 'earn', description: `Order ${orderId}`, created_at: new Date().toISOString() });
 
+    // Tier update
     const user = db.findById('users', req.user.id);
     const pts = user.loyalty_points || 0;
     const tier = pts >= 10000 ? 'platinum' : pts >= 3000 ? 'gold' : pts >= 1000 ? 'silver' : 'bronze';
     db.updateById('users', req.user.id, { tier });
 
+    // Customer notification
     db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: req.user.id, title: 'Order Confirmed! 🎉', body: `Order #${orderId} confirm hua. +${loyalty_earned} ZepCoins mile!`, read: false, created_at: new Date().toISOString() });
-    if (assigned_partner) {
-      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: assigned_partner, title: 'New Delivery Job! 📦', body: `Order #${orderId} pickup ke liye ready hai`, read: false, created_at: new Date().toISOString() });
+
+    // Saare active delivery partners ko notify karo
+    const allPartners = db.find('delivery_partners', { status: 'active' });
+    for (const dp of allPartners) {
+      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: dp.user_id, title: 'Naya Order Available! 📦', body: `Order #${orderId} — ₹${total} — Jaldi accept karo!`, read: false, created_at: new Date().toISOString() });
     }
 
     res.status(201).json({ success: true, order, message: `Order place hua! +${loyalty_earned} ZepCoins mile 🌟` });
@@ -135,6 +214,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
   }
 });
 
+// PUT /api/orders/:id/status
 router.put('/:id/status', auth, (req, res) => {
   try {
     const { status } = req.body;
@@ -144,15 +224,20 @@ router.put('/:id/status', auth, (req, res) => {
     const order = db.findById('orders', req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
+    // Shopowner sirf apni shop ka status update kar sakta hai
     if (req.user.role === 'shopowner') {
       const myShops = db.find('shops', { owner_id: req.user.id }).map(s => s.id);
       if (!order.items || !order.items.some(i => myShops.includes(i.shop_id)))
         return res.status(403).json({ success: false, message: 'Access denied' });
     }
+    // Delivery sirf apna assigned order update kar sakta hai
+    if (req.user.role === 'delivery' && order.delivery_partner_id !== req.user.id)
+      return res.status(403).json({ success: false, message: 'Pehle order accept karo' });
+    // Customer sirf cancel kar sakta hai
     if (req.user.role === 'customer' && status !== 'cancelled')
       return res.status(403).json({ success: false, message: 'Customer sirf cancel kar sakta hai' });
 
-    // FIX: Cancel hone par stock wapas aur loyalty points bhi wapas
+    // Cancel pe sab wapas karo
     if (status === 'cancelled' && order.status !== 'cancelled') {
       for (const item of (order.items || [])) {
         const product = db.findById('products', item.product_id);
@@ -193,22 +278,23 @@ router.put('/:id/status', auth, (req, res) => {
   }
 });
 
+// GET /api/orders/:id/track
 router.get('/:id/track', auth, (req, res) => {
   const order = db.findById('orders', req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-  if (req.user.role === 'customer' && order.user_id !== req.user.id)
-    return res.status(403).json({ success: false, message: 'Access denied' });
 
   const statusFlow = ['confirmed', 'preparing', 'picked_up', 'out_for_delivery', 'delivered'];
   const currentIdx = statusFlow.indexOf(order.status);
   const timeline = statusFlow.map((s, i) => ({
-    status: s, label: { confirmed: 'Order Confirmed', preparing: 'Preparing', picked_up: 'Picked Up', out_for_delivery: 'Out for Delivery', delivered: 'Delivered' }[s],
+    status: s,
+    label: { confirmed: 'Order Confirmed', preparing: 'Preparing', picked_up: 'Picked Up', out_for_delivery: 'Out for Delivery', delivered: 'Delivered' }[s],
     completed: i <= currentIdx, active: i === currentIdx,
     timestamp: i <= currentIdx ? new Date(Date.now() - (currentIdx - i) * 10 * 60000).toISOString() : null
   }));
 
   const partner = order.delivery_partner_id ? db.findById('users', order.delivery_partner_id) : null;
   const dp = order.delivery_partner_id ? db.findOne('delivery_partners', { user_id: order.delivery_partner_id }) : null;
+
   res.json({ success: true, order_id: order.id, status: order.status, timeline, estimated_delivery: order.estimated_delivery, delivery_partner: partner ? { name: partner.name, phone: partner.phone, rating: dp?.rating || 4.9, vehicle: dp?.vehicle, lat: 26.297 + (Math.random() - 0.5) * 0.005, lng: 73.020 + (Math.random() - 0.5) * 0.005 } : null });
 });
 
