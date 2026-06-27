@@ -379,6 +379,13 @@ function renderNav() {
 }
 
 async function showScreen(name) {
+  // AUTH GUARD — login ke bina koi bhi screen nahi dikhegi
+  const publicScreens = ['login'];
+  if (!token && !publicScreens.includes(name)) {
+    name = 'login';
+    setTimeout(() => showToast('Pehle login karo!'), 100);
+  }
+
   Object.values(NAVS).flat().forEach(n => { const e = document.getElementById('ni-' + n.s); if (e) e.classList.remove('active'); });
   const e = document.getElementById('ni-' + name); if (e) e.classList.add('active');
   const mc = document.getElementById('mc');
