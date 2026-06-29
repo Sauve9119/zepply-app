@@ -424,6 +424,7 @@ login: async () => `
     <div class="auth-tabs">
       <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</div>
       <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Register</div>
+      <div class="auth-tab" id="tab-forgot" onclick="switchAuthTab('forgot')" style="display:none">Forgot</div>
     </div>
     <!-- LOGIN FORM -->
     <div id="form-login">
@@ -436,16 +437,39 @@ login: async () => `
     </div>
     <!-- REGISTER FORM -->
     <div id="form-register" style="display:none">
-      <div class="fg"><label>Full Name</label><input id="rg-name" placeholder="Your name"></div>
-      <div class="fg"><label>Email</label><input id="rg-email" type="email" placeholder="you@email.com"></div>
+      <div class="fg"><label>Full Name</label><input id="rg-name" placeholder="Aapka naam"></div>
+      <div class="fg"><label>Email</label><input id="rg-email" type="email" placeholder="aap@email.com"></div>
       <div class="fg"><label>Phone</label><input id="rg-phone" placeholder="9876543210"></div>
-      <div class="fg"><label>Password</label><input id="rg-pwd" type="password" placeholder="Min 8 chars"></div>
+      <div class="fg"><label>Password</label><input id="rg-pwd" type="password" placeholder="Min 6 characters"></div>
       <div class="fg" style="background:var(--surface-1);padding:10px 12px;border-radius:8px;border:0.5px solid var(--border)">
         <div style="font-size:12px;color:var(--t2);margin-bottom:4px;">Registering as</div>
         <div style="font-weight:500;font-size:14px;" id="reg-role-display">Customer</div>
         <input type="hidden" id="rg-role">
       </div>
-      <button class="btn bp bblk" onclick="handleRegister()">Create Account →</button>
+      <div id="otp-step" style="display:none" class="fg">
+        <label>Email OTP</label>
+        <input id="rg-otp" type="number" placeholder="6 digit OTP daalo">
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Aapki email pe OTP bheja gaya hai</div>
+      </div>
+      <button class="btn bp bblk" onclick="handleRegister()" id="reg-btn">Send OTP & Verify →</button>
+    </div>
+
+    <div id="form-forgot" style="display:none">
+      <div style="text-align:center;margin-bottom:1rem">
+        <div style="font-size:1.5rem">🔐</div>
+        <div class="fw7">Password Reset</div>
+        <div class="tsm tm">OTP aapki email pe aayega</div>
+      </div>
+      <div class="fg"><label>Registered Email</label><input id="fp-email" type="email" placeholder="aap@email.com"></div>
+      <button class="btn bp bblk" onclick="sendForgotOTP()">OTP Bhejo</button>
+      <div id="fp-otp-step" style="display:none;margin-top:.75rem">
+        <div class="fg"><label>OTP</label><input id="fp-otp" type="number" placeholder="6 digit OTP"></div>
+        <div class="fg"><label>Naya Password</label><input id="fp-newpwd" type="password" placeholder="Min 6 characters"></div>
+        <button class="btn bp bblk" onclick="resetPassword()">Password Reset Karo</button>
+      </div>
+      <div style="text-align:center;margin-top:.75rem">
+        <span style="font-size:12px;color:var(--a);cursor:pointer" onclick="switchAuthTab('login')">← Wapas Login pe</span>
+      </div>
     </div>
   </div>`,
 
@@ -640,7 +664,9 @@ sale: async () => {
 
 // SHOP OWNER DASHBOARD
 dash: async () => {
-  const ana = await api('GET', '/api/analytics/shop/s1');
+  const shopsAna = await api('GET', '/api/shops');
+    const myShopAna = (shopsAna.shops || []).find(s => s.owner_id === user?.id);
+    const ana = myShopAna ? await api('GET', '/api/analytics/shop/' + myShopAna.id) : { analytics: {} };
   const a = ana.analytics || {};
   return `
     <div style="background:linear-gradient(135deg,#1D4ED8,#4F46E5);color:#fff;border-radius:var(--rl);padding:1.1rem;margin-bottom:.75rem">
@@ -686,7 +712,17 @@ sorders: async () => {
 },
 
 sproducts: async () => {
-  const res = await api('GET', '/api/shops/s1/products');
+  // FIX: s1 hardcoded tha — ab user ki real shop fetch karo
+  const shopsRes = await api('GET', '/api/shops');
+  const myShop = (shopsRes.shops || []).find(s => s.owner_id === user?.id);
+  if (!myShop) return `<div class="card" style="text-align:center;padding:2rem">
+    <div style="font-size:2rem">🏪</div>
+    <div class="fw7 mt1">Koi shop nahi mili</div>
+    <div class="tsm tm mt1">Pehle Dashboard se apni shop banao</div>
+    <button class="btn bp bblk mt2" onclick="showScreen('dash')">Dashboard pe Jao</button>
+  </div>`;
+  const shopId = myShop.id;
+  const res = await api('GET', '/api/shops/' + shopId + '/products');
   const prods = res.products || [];
   return `
     <div class="fl ic jb mb1"><h2 class="st" style="margin:0">🏷️ Products</h2>
@@ -723,7 +759,10 @@ sproducts: async () => {
 },
 
 spromos: async () => {
-  const res = await api('GET', '/api/promotions?shop_id=s1');
+  const shopsRes2 = await api('GET', '/api/shops');
+  const myShop2 = (shopsRes2.shops || []).find(s => s.owner_id === user?.id);
+  const myShopId2 = myShop2?.id || '';
+  const res = await api('GET', '/api/promotions?shop_id=' + myShopId2);
   const promos = res.promotions || [];
   return `
     <h2 class="st">📣 Promotions</h2>
@@ -1289,7 +1328,9 @@ async function submitReview() {
   if (!myRating) { showToast('Please select a rating'); return; }
   const comment = document.getElementById('rev-comment')?.value || '';
   const orderId = currentOrderId || 'ord1';
-  const res = await api('POST', '/api/reviews', { order_id: orderId, shop_id: 's1', rating: myRating, comment, review_type: 'text' });
+  const orderRes = await api('GET', '/api/orders/' + orderId);
+    const shopId4Review = orderRes.order?.items?.[0]?.shop_id || '';
+    const res = await api('POST', '/api/reviews', { order_id: orderId, shop_id: shopId4Review, rating: myRating, comment, review_type: 'text' });
   if (res.success || res.message?.includes('Already')) {
     showToast(res.success ? `✅ Review submitted! +${res.points_earned} ZepCoins` : res.message);
     closeModal('m-rate');
@@ -1402,10 +1443,14 @@ async function saveProduct() {
     stock: +(document.getElementById('np-stock')?.value || 0), discount: 0
   });
   if (res.success) { showToast('✅ Product added!'); showScreen('sproducts'); }
+  else showToast('❌ ' + (res.message || 'Error'));
   else showToast('❌ ' + res.message);
 }
 async function deleteProduct(id) {
-  const res = await api('DELETE', `/api/shops/s1/products/${id}`);
+  const shopsR2 = await api('GET', '/api/shops');
+  const myS2 = (shopsR2.shops || []).find(s => s.owner_id === user?.id);
+  if (!myS2) return showToast('Shop nahi mili');
+  const res = await api('DELETE', `/api/shops/${myS2.id}/products/${id}`);
   if (res.success) { showToast('✅ Product removed'); showScreen('sproducts'); }
   else showToast('❌ ' + res.message);
 }
@@ -1415,7 +1460,9 @@ async function updateOrderStatus(orderId, status) {
   else showToast('❌ ' + res.message);
 }
 async function createPromo() {
-  const res = await api('POST', '/api/promotions', { shop_id: 's1', title: 'Special Offer', type: 'percentage', value: 20, applicable_to: 'all' });
+  const shopsResP = await api('GET', '/api/shops');
+    const myShopP = (shopsResP.shops || []).find(s => s.owner_id === user?.id);
+    const res = await api('POST', '/api/promotions', { shop_id: myShopP?.id || '', title: 'Special Offer', type: 'percentage', value: 20, applicable_to: 'all' });
   if (res.success) { showToast('✅ Promotion created!'); showScreen('spromos'); }
   else showToast('❌ ' + res.message);
 }
@@ -1472,8 +1519,11 @@ function switchAuthTab(tab) {
   }
   document.getElementById('tab-login')?.classList.toggle('active', tab === 'login');
   document.getElementById('tab-register')?.classList.toggle('active', tab === 'register');
+  document.getElementById('tab-forgot')?.classList.toggle('active', tab === 'forgot');
   document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  const ff = document.getElementById('form-forgot');
+  if (ff) ff.style.display = tab === 'forgot' ? 'block' : 'none';
 }
 async function handleLogin() {
   const email = document.getElementById('li-email')?.value;
@@ -1483,14 +1533,52 @@ async function handleLogin() {
   if (ok) { showToast('✅ Welcome back, ' + user.name + '!'); const first = NAVS[role][0].s; showScreen(first); }
 }
 async function handleRegister() {
-  const name = document.getElementById('rg-name')?.value;
-  const email = document.getElementById('rg-email')?.value;
-  const phone = document.getElementById('rg-phone')?.value;
+  const name = document.getElementById('rg-name')?.value?.trim();
+  const email = document.getElementById('rg-email')?.value?.trim();
+  const phone = document.getElementById('rg-phone')?.value?.trim();
   const pwd = document.getElementById('rg-pwd')?.value;
   const r = document.getElementById('rg-role')?.value;
-  if (!name || !email || !phone || !pwd) { showToast('All fields required'); return; }
+  if (!name || !email || !phone || !pwd) { showToast('Saari fields bharo'); return; }
+
+  // Step 1: OTP send karo
+  const otpStep = document.getElementById('otp-step');
+  if (!otpStep || otpStep.style.display === 'none') {
+    const res = await api('POST', '/api/auth/send-otp', { email }, false);
+    if (!res.success) return showToast('❌ ' + res.message);
+    showToast('📧 OTP bheja gaya ' + email + ' pe!');
+    if (otpStep) otpStep.style.display = 'block';
+    return;
+  }
+
+  // Step 2: OTP verify + register
+  const otp = document.getElementById('rg-otp')?.value?.trim();
+  if (!otp) return showToast('OTP daalo');
+  const verifyRes = await api('POST', '/api/auth/verify-otp', { email, otp }, false);
+  if (!verifyRes.success) return showToast('❌ ' + verifyRes.message);
+
   const ok = await doRegister(name, email, phone, pwd, r);
   if (ok) { const first = NAVS[role][0].s; showScreen(first); }
+}
+
+// Forgot password functions
+async function sendForgotOTP() {
+  const email = document.getElementById('fp-email')?.value?.trim();
+  if (!email) return showToast('Email daalo');
+  const res = await api('POST', '/api/auth/forgot-password', { email }, false);
+  if (!res.success) return showToast('❌ ' + res.message);
+  showToast('📧 OTP bheja gaya!');
+  document.getElementById('fp-otp-step').style.display = 'block';
+}
+
+async function resetPassword() {
+  const email = document.getElementById('fp-email')?.value?.trim();
+  const otp = document.getElementById('fp-otp')?.value?.trim();
+  const newPwd = document.getElementById('fp-newpwd')?.value;
+  if (!otp || !newPwd) return showToast('OTP aur naya password daalo');
+  const res = await api('POST', '/api/auth/reset-password', { email, otp, new_password: newPwd }, false);
+  if (!res.success) return showToast('❌ ' + res.message);
+  showToast('✅ ' + res.message);
+  switchAuthTab('login');
 }
 
 // ════════════════════════════════════════════
