@@ -20,7 +20,7 @@
     },
     {
       "id": "ch2",
-      "title": "Spend ₹2000 this week",
+      "title": "Spend \u20b92000 this week",
       "reward_points": 300,
       "target": 2000,
       "type": "spend"
@@ -89,5 +89,7 @@
       "used": 0,
       "active": true
     }
-  ]
+  ],
+  "pending_otps": [],
+  "reset_otps": []
 }
