@@ -1435,7 +1435,10 @@ async function saveProduct() {
   const name = document.getElementById('np-name')?.value;
   const price = document.getElementById('np-price')?.value;
   if (!name || !price) { showToast('Name and price required'); return; }
-  const res = await api('POST', '/api/shops/s1/products', {
+  const shopsR = await api('GET', '/api/shops');
+  const myShop = (shopsR.shops || []).find(s => s.owner_id === user?.id);
+  if (!myShop) return showToast('Shop nahi mili');
+  const res = await api('POST', `/api/shops/${myShop.id}/products`, {
     name, category: document.getElementById('np-cat')?.value || 'General',
     unit: document.getElementById('np-unit')?.value || 'pc',
     price: +price, mrp: +(document.getElementById('np-mrp')?.value || price),
@@ -1444,7 +1447,6 @@ async function saveProduct() {
   });
   if (res.success) { showToast('✅ Product added!'); showScreen('sproducts'); }
   else showToast('❌ ' + (res.message || 'Error'));
-  else showToast('❌ ' + res.message);
 }
 async function deleteProduct(id) {
   const shopsR2 = await api('GET', '/api/shops');
