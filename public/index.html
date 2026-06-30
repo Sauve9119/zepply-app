@@ -322,6 +322,13 @@ const NAVS = {
   delivery: [{i:'🏠',l:'Home',s:'dlhome'},{i:'🗺️',l:'Route',s:'route'},{i:'💰',l:'Earnings',s:'earns'},{i:'🏆',l:'Rewards',s:'dlrewards'},{i:'💡',l:'Earn More',s:'dlearn'}],
 };
 
+// Screens jo bina login ke dekhi ja sakti hain (role-wise)
+const GUEST_SCREENS = {
+  customer: ['home', 'stores', 'sale', 'login'],
+  shopowner: ['login'],
+  delivery: ['login'],
+};
+
 function enterApp(r) {
   role = r;
   // Logout any existing session if switching roles
@@ -339,7 +346,9 @@ function enterApp(r) {
   document.getElementById('rbadge').textContent = r === 'customer' ? 'Customer' : r === 'shopowner' ? 'Shop Owner' : 'Delivery Partner';
   document.getElementById('cart-ib').style.display = r === 'customer' ? 'flex' : 'none';
   renderNav();
-  if (!token) { 
+  if (!token) {
+    // Customer guest browsing allowed — seedha home dikhao, login sirf checkout pe maango
+    if (r === 'customer') { showScreen('home'); return; }
     showScreen('login');
     // Set role in register form after render
     setTimeout(() => {
@@ -379,9 +388,9 @@ function renderNav() {
 }
 
 async function showScreen(name) {
-  // AUTH GUARD — login ke bina koi bhi screen nahi dikhegi
-  const publicScreens = ['login'];
-  if (!token && !publicScreens.includes(name)) {
+  // AUTH GUARD — sirf wahi screens jo current role ke liye guest-accessible nahi hain, unke liye login chahiye
+  const guestOk = GUEST_SCREENS[role] || ['login'];
+  if (!token && !guestOk.includes(name)) {
     name = 'login';
     setTimeout(() => showToast('Pehle login karo!'), 100);
   }
@@ -421,6 +430,7 @@ login: async () => `
   <div class="auth-wrap">
     <div class="auth-title">Welcome to Zepply 👋</div>
     <div class="auth-sub">Sign in or create an account to continue</div>
+    ${role === 'customer' ? `<div style="text-align:center;margin-bottom:1rem"><span style="font-size:.75rem;color:var(--p);cursor:pointer;text-decoration:underline" onclick="showScreen('home')">← Bina login ke shopping continue karo</span></div>` : ''}
     <div class="auth-tabs">
       <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</div>
       <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Register</div>
@@ -1056,7 +1066,7 @@ async function applyCoupon() {
 }
 
 async function placeOrder() {
-  if (!token) { showToast('Please login first'); closeModal('m-cart'); showScreen('login'); return; }
+  if (!token) { showToast('Order place karne ke liye pehle login karo'); closeModal('m-cart'); showScreen('login'); return; }
   const items = Object.values(cart).map(i => ({ product_id: i.id, qty: i.qty }));
   if (!items.length) { showToast('Cart is empty'); return; }
   const res = await api('POST', '/api/orders', {
