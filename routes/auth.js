@@ -65,9 +65,9 @@ router.post('/send-otp', async (req, res) => {
   if (existing) db.deleteById('pending_otps', existing.id);
   db.insert('pending_otps', { id: 'otp' + uid(), email, otp, expiry, verified: false });
 
-  await sendOTP(email, otp, 'Zepply — Email Verify karo', 'Aapka Zepply registration OTP:');
-
+  // Response turant bhejo — email background mein bhejo (taaki button slow na lage)
   res.json({ success: true, message: `OTP bheja gaya ${email} pe. 10 minute mein expire hoga.` });
+  sendOTP(email, otp, 'Zepply — Email Verify karo', 'Aapka Zepply registration OTP:');
 });
 
 // POST /api/auth/verify-otp — OTP verify karo
@@ -85,6 +85,7 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, phone, password, role = 'customer', referred_by } = req.body;
     if (!name || !email || !phone || !password) return res.status(400).json({ success: false, message: 'Saari fields bharo' });
+    if (!/^[6-9]\d{9}$/.test(phone)) return res.status(400).json({ success: false, message: 'Valid 10-digit mobile number daalo (jaise 9876543210)' });
     if (!['customer', 'shopowner', 'delivery'].includes(role)) return res.status(400).json({ success: false, message: 'Invalid role' });
     if (db.findOne('users', { email })) return res.status(409).json({ success: false, message: 'Email pehle se registered hai' });
 
@@ -167,8 +168,8 @@ router.post('/forgot-password', async (req, res) => {
   if (existing) db.deleteById('reset_otps', existing.id);
   db.insert('reset_otps', { id: 'rot' + uid(), email, otp, expiry });
 
-  await sendOTP(email, otp, 'Zepply — Password Reset OTP', 'Aapka password reset OTP:');
   res.json({ success: true, message: `OTP bheja gaya ${email} pe` });
+  sendOTP(email, otp, 'Zepply — Password Reset OTP', 'Aapka password reset OTP:');
 });
 
 // POST /api/auth/reset-password — OTP verify karke password badlo
