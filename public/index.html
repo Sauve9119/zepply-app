@@ -439,7 +439,7 @@ login: async () => `
     <div id="form-register" style="display:none">
       <div class="fg"><label>Full Name</label><input id="rg-name" placeholder="Aapka naam"></div>
       <div class="fg"><label>Email</label><input id="rg-email" type="email" placeholder="aap@email.com"></div>
-      <div class="fg"><label>Phone</label><input id="rg-phone" placeholder="9876543210"></div>
+      <div class="fg"><label>Phone</label><input id="rg-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="9876543210" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)"></div>
       <div class="fg"><label>Password</label><input id="rg-pwd" type="password" placeholder="Min 6 characters"></div>
       <div class="fg" style="background:var(--surface-1);padding:10px 12px;border-radius:8px;border:0.5px solid var(--border)">
         <div style="font-size:12px;color:var(--t2);margin-bottom:4px;">Registering as</div>
@@ -1541,6 +1541,7 @@ async function handleRegister() {
   const pwd = document.getElementById('rg-pwd')?.value;
   const r = document.getElementById('rg-role')?.value;
   if (!name || !email || !phone || !pwd) { showToast('Saari fields bharo'); return; }
+  if (!/^[6-9]\d{9}$/.test(phone)) { showToast('Valid 10-digit mobile number daalo'); return; }
 
   // Step 1: OTP send karo
   const otpStep = document.getElementById('otp-step');
