@@ -134,7 +134,7 @@ router.post('/register', async (req, res) => {
     if (role === 'shopowner') {
       db.insert('shops', {
         id: 's' + uid(), owner_id: newUser.id,
-        name: name + "'s Shop", category: 'Grocery', description: '', emoji: '🏪',
+        name: name + ' Store', category: 'Grocery', description: '', emoji: '🏪',
         address: 'Jodhpur, Rajasthan', lat: 26.298, lng: 73.018,
         rating: 0, total_reviews: 0, is_open: true, delivery_time: '20 min',
         min_order: 100, delivery_charge: 25, gst: '',
