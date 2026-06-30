@@ -122,6 +122,18 @@ router.post('/register', async (req, res) => {
       db.insert('delivery_partners', { id: 'dp' + uid(), user_id: newUser.id, status: 'active', rating: 5.0, total_deliveries: 0, total_earnings: 0, coins: 100, badge: 'bronze', created_at: new Date().toISOString() });
     }
 
+    // Shop owner — auto-create their shop so products can be added right away
+    if (role === 'shopowner') {
+      db.insert('shops', {
+        id: 's' + uid(), owner_id: newUser.id,
+        name: name + "'s Shop", category: 'Grocery', description: '', emoji: '🏪',
+        address: 'Jodhpur, Rajasthan', lat: 26.298, lng: 73.018,
+        rating: 0, total_reviews: 0, is_open: true, delivery_time: '20 min',
+        min_order: 100, delivery_charge: 25, gst: '',
+        created_at: new Date().toISOString()
+      });
+    }
+
     db.insert('notifications', { id: 'n' + uid(), user_id: newUser.id, title: 'Zepply mein aapka swagat hai! 🎉', body: `Namaste ${name}! 100 ZepCoins welcome bonus mila.`, read: false, created_at: new Date().toISOString() });
 
     res.status(201).json({ success: true, message: 'Registration successful!', token: token(newUser.id), user: safe(newUser) });
