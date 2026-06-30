@@ -667,7 +667,7 @@ sale: async () => {
       <span style="position:absolute;top:5px;right:5px;cursor:pointer;font-size:.9rem" onclick="toggleWish('${p.id}',this)">🤍</span></div>
       <div class="spi"><div class="spn">${p.name}</div><div style="font-size:.65rem;color:var(--t3)">${p.unit} · ${p.shop_name}</div>
       <div class="spp mt1"><span class="snow">₹${p.price}</span><span class="swas">₹${p.mrp}</span></div>
-      <button class="btn ba bsm mt1" style="width:100%" onclick="addCart('${p.id}',${p.price},'${p.name}','${p.emoji}','${p.shop_id}','${p.shop_name}')">Add +</button>
+      <button class="btn ba bsm mt1" style="width:100%" onclick="addCart('${p.id}',${p.price},'${esc(p.name)}','${p.emoji}','${p.shop_id}','${esc(p.shop_name)}')">Add +</button>
       </div></div>`).join('')}
     </div>`;
 },
@@ -957,6 +957,9 @@ dlearn: async () => `
 // ════════════════════════════════════════════
 // STORE CARD RENDER
 // ════════════════════════════════════════════
+// HTML attribute mein safe interpolation ke liye — quotes/apostrophes wale naam (jaise "Rahul's Shop") onclick string ko todte hain
+function esc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
 function renderShopCard(store, prods = []) {
   return `<div class="sc">
     <div class="sh2">
@@ -980,7 +983,7 @@ function renderShopCard(store, prods = []) {
 
 function renderAddBtn(p) {
   const item = cart[p.id];
-  if (!item) return `<button class="addbtn" onclick='addCart("${p.id}",${p.price},"${p.name}","${p.emoji}","${p.shop_id}","${p.shop_name||p.sn||''}")'>+</button>`;
+  if (!item) return `<button class="addbtn" onclick='addCart("${p.id}",${p.price},"${esc(p.name)}","${p.emoji}","${p.shop_id}","${esc(p.shop_name||p.sn||'')}")'>+</button>`;
   return `<div class="qc"><button class="qb" onclick='chQty("${p.id}",-1)'>−</button><span class="qn">${item.qty}</span><button class="qb" onclick='chQty("${p.id}",1)'>+</button></div>`;
 }
 
@@ -1109,7 +1112,7 @@ async function filterCat(el, cat) {
   if (cat === '❤️ Wishlist' || cat === 'Wishlist') {
     const res = await api('GET', '/api/wishlist');
     const items = res.wishlist || [];
-    sl.innerHTML = items.length ? `<div class="spg">${items.map(w=>`<div class="spc"><div class="simg">${w.product?.emoji||'📦'}${w.product?.discount>0?`<div class="dbadge">${w.product.discount}% OFF</div>`:''}</div><div class="spi"><div class="spn">${w.product?.name}</div><div style="font-size:.65rem;color:var(--t3)">${w.product?.unit} · ${w.shop_name}</div><div class="spp mt1"><span class="snow">₹${w.product?.price}</span>${w.product?.discount>0?`<span class="swas">₹${w.product?.mrp}</span>`:''}</div><button class="btn ba bsm mt1" style="width:100%" onclick="addCart('${w.product_id}',${w.product?.price},'${w.product?.name}','${w.product?.emoji||'📦'}','${w.product?.shop_id}','${w.shop_name}')">Add +</button></div></div>`).join('')}</div>` : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">❤️ No wishlisted items yet</div>';
+    sl.innerHTML = items.length ? `<div class="spg">${items.map(w=>`<div class="spc"><div class="simg">${w.product?.emoji||'📦'}${w.product?.discount>0?`<div class="dbadge">${w.product.discount}% OFF</div>`:''}</div><div class="spi"><div class="spn">${w.product?.name}</div><div style="font-size:.65rem;color:var(--t3)">${w.product?.unit} · ${w.shop_name}</div><div class="spp mt1"><span class="snow">₹${w.product?.price}</span>${w.product?.discount>0?`<span class="swas">₹${w.product?.mrp}</span>`:''}</div><button class="btn ba bsm mt1" style="width:100%" onclick="addCart('${w.product_id}',${w.product?.price},'${esc(w.product?.name)}','${w.product?.emoji||'📦'}','${w.product?.shop_id}','${esc(w.shop_name)}')">Add +</button></div></div>`).join('')}</div>` : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">❤️ No wishlisted items yet</div>';
     return;
   }
   const res = await api('GET', `/api/shops?category=${encodeURIComponent(cat)}`);
