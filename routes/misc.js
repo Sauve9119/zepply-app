@@ -75,8 +75,9 @@ router.get('/analytics/shop/:shopId', auth, requireRole('shopowner'), (req, res)
 
 router.get('/promotions', (req, res) => {
   const { shop_id } = req.query;
-  let promos = db.findAll('promotions').filter(p => p.status === 'active');
+  let promos = db.findAll('promotions');
   if (shop_id) promos = promos.filter(p => p.shop_id === shop_id);
+  else promos = promos.filter(p => p.status === 'active');
   res.json({ success: true, promotions: promos });
 });
 
@@ -87,6 +88,16 @@ router.post('/promotions', auth, requireRole('shopowner'), (req, res) => {
   const promo = { id: 'pr' + uuidv4().slice(0, 8), shop_id, title, type, value, min_order: min_order || 0, applicable_to: applicable_to || 'all', status: 'active', ends_at: ends_at || null, created_at: new Date().toISOString() };
   db.insert('promotions', promo);
   res.status(201).json({ success: true, promotion: promo });
+});
+
+router.put('/promotions/:id/status', auth, requireRole('shopowner'), (req, res) => {
+  const { status } = req.body;
+  const promo = db.findById('promotions', req.params.id);
+  if (!promo) return res.status(404).json({ success: false, message: 'Promotion not found' });
+  const shop = db.findById('shops', promo.shop_id);
+  if (!shop || shop.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Not authorized' });
+  const updated = db.updateById('promotions', req.params.id, { status });
+  res.json({ success: true, promotion: updated });
 });
 
 router.get('/analytics/platform', (req, res) => {
