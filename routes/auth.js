@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const nodemailer = require('nodemailer');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth } = require('../middleware/auth');
@@ -12,37 +11,45 @@ const token = id => jwt.sign({ userId: id }, SECRET, { expiresIn: '7d' });
 const safe = u => { if (!u) return null; const c = { ...u }; delete c.password; delete c.otp; delete c.otp_expiry; return c; };
 const uid = () => uuidv4().replace(/-/g, '').slice(0, 12);
 
-// Email transporter — Gmail se
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS  // Gmail App Password
-  }
-});
-
+// Email bhejne ke liye Brevo HTTPS API use karte hain (SMTP nahi) —
+// Railway jaise platforms outbound SMTP ports (465/587) block karte hain free/hobby plans pe,
+// isliye HTTPS API (port 443) zyada reliable hai.
 const sendOTP = async (email, otp, subject, body) => {
-  if (!process.env.GMAIL_USER) {
+  if (!process.env.BREVO_API_KEY) {
     console.log(`[DEV] OTP for ${email}: ${otp}`);
     return true;
   }
   try {
-    await transporter.sendMail({
-      from: `"Zepply App" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px">
-          <h2 style="color:#6C47FF">🛒 Zepply</h2>
-          <p>${body}</p>
-          <div style="background:#f4f4f4;padding:20px;border-radius:8px;text-align:center;margin:20px 0">
-            <h1 style="letter-spacing:8px;color:#6C47FF;margin:0">${otp}</h1>
-          </div>
-          <p style="color:#888;font-size:12px">Ye OTP 10 minute mein expire ho jaayega. Kisi ke saath share mat karo.</p>
-        </div>`
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Zepply App', email: process.env.BREVO_SENDER_EMAIL },
+        to: [{ email }],
+        subject,
+        htmlContent: `
+          <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px">
+            <h2 style="color:#6C47FF">🛒 Zepply</h2>
+            <p>${body}</p>
+            <div style="background:#f4f4f4;padding:20px;border-radius:8px;text-align:center;margin:20px 0">
+              <h1 style="letter-spacing:8px;color:#6C47FF;margin:0">${otp}</h1>
+            </div>
+            <p style="color:#888;font-size:12px">Ye OTP 10 minute mein expire ho jaayega. Kisi ke saath share mat karo.</p>
+          </div>`
+      })
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('Brevo email error:', res.status, errText);
+      return false;
+    }
     return true;
   } catch (e) {
+
     console.error('Email error:', e.message);
     return false;
   }
