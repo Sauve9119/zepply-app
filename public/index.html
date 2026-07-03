@@ -221,6 +221,10 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
     <div class="fl ic g1"><input id="cpn-inp" placeholder="Coupon code (try SAVE50)" style="flex:1"><button class="btn bp bsm" onclick="applyCoupon()">Apply</button></div>
     <div id="cpn-msg" style="font-size:.72rem;margin-top:.25rem"></div>
   </div>
+  <div class="fg mt1">
+    <label>📍 Delivery Address</label>
+    <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho (jaise: 12B, Shastri Nagar, Jodhpur - 342001)" style="resize:none"></textarea>
+  </div>
   <button class="btn bp bblk mt1" onclick="placeOrder()">Place Order →</button>
   <button class="btn bo bblk mt1" onclick="closeModal('m-cart')">Continue Shopping</button>
 </div></div>
@@ -713,6 +717,7 @@ sorders: async () => {
       <div class="fl ic jb"><span class="fw7 tsm">#${o.id.slice(-8).toUpperCase()} · ${o.customer_name||'Customer'}</span>
       <span class="tag ${o.status==='confirmed'?'tb':o.status==='preparing'?'tw':o.status==='delivered'?'tg':'tr'}">${o.status.replace(/_/g,' ')}</span></div>
       <div class="tsm tm mt1">${o.items?.map(i=>i.product_name+' ×'+i.qty).join(', ')}</div>
+      <div class="tsm mt1">📍 <strong>${o.address||'Address nahi diya'}</strong></div>
       <div class="fl ic jb mt1"><span class="txs tt">${new Date(o.created_at).toLocaleString('en-IN')}</span>
       <div class="fl g1 ic"><span class="fw7 tsm" style="color:var(--a)">₹${o.total}</span>
       ${o.status==='confirmed'?`<button class="btn ba bsm" onclick="updateOrderStatus('${o.id}','preparing')">Accept</button><button class="btn bsm" style="background:var(--dl);color:var(--d);border:none" onclick="updateOrderStatus('${o.id}','cancelled')">Reject</button>`:''}
@@ -819,6 +824,18 @@ searn: async () => `
 dlhome: async () => {
   const earn = await api('GET', '/api/delivery/earnings');
   const e = earn.earnings || {};
+  const ordersRes = await api('GET', '/api/orders');
+  const allOrders = ordersRes.orders || [];
+  const available = allOrders.filter(o => !o.delivery_partner_id && !['delivered','cancelled'].includes(o.status));
+  const mine = allOrders.filter(o => o.delivery_partner_id === user?.id && !['delivered','cancelled'].includes(o.status));
+  const statusBtn = o => {
+    if (o.status==='confirmed'||o.status==='preparing') return '<button class="btn bp bsm" onclick="updateDlStatus(\''+o.id+'\',\'picked_up\')">✅ Picked Up</button>';
+    if (o.status==='picked_up') return '<button class="btn ba bsm" onclick="updateDlStatus(\''+o.id+'\',\'out_for_delivery\')">🚀 Out for Delivery</button>';
+    if (o.status==='out_for_delivery') return '<button class="btn ba bsm" onclick="updateDlStatus(\''+o.id+'\',\'delivered\')">✅ Delivered</button>';
+    return '';
+  };
+  const mineHtml = mine.map(o => '<div class="card" style="border:2px solid var(--a)"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tg">'+o.status.replace(/_/g,' ')+'</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">💰 ₹'+o.total+' · '+(o.items&&o.items.length)+' items</div><div class="fl g1 mt1">'+statusBtn(o)+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.address||'Jodhpur')+'" target="_blank" class="btn bp bsm">🗺️ Maps</a></div></div>').join('');
+  const availHtml = available.map(o => '<div class="card"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tw">New Order</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">🛒 '+(o.items||[]).map(i=>i.product_name+' ×'+i.qty).join(', ')+'</div><div class="fl ic jb mt1"><span class="fw7" style="color:var(--a)">₹'+o.total+'</span><button class="btn ba bsm" onclick="acceptOrder(\''+o.id+'\')">Accept Order →</button></div></div>').join('');
   return `
     <div class="ec">
       <div style="font-size:.75rem;opacity:.8">Today's Earnings</div>
@@ -830,24 +847,18 @@ dlhome: async () => {
     <div class="g4c">
       <div class="sb"><div class="sv">${e.today?.deliveries||0}</div><div class="sl">Today</div></div>
       <div class="sb"><div class="sv">${e.rating||0}⭐</div><div class="sl">Rating</div></div>
-      <div class="sb"><div class="sv">42km</div><div class="sl">Distance</div></div>
       <div class="sb"><div class="sv">₹${e.today?.deliveries>0?Math.round((e.today?.total||0)/(e.today?.deliveries||1)):0}</div><div class="sl">Per Del</div></div>
+      <div class="sb"><div class="sv">${available.length}</div><div class="sl">Available</div></div>
     </div>
-    <div class="card" style="background:#FFFBEB;border:1px solid var(--g)">
-      <div class="fw7 tsm">🏆 Daily Target: ${e.daily_target?.target||20} deliveries = ₹200 bonus</div>
-      <div class="pb mt1"><div class="pf" style="width:${Math.min(100,((e.daily_target?.current||0)/(e.daily_target?.target||20))*100).toFixed(0)}%;background:var(--g)"></div></div>
-      <div class="txs tt mt1">${e.daily_target?.current||0} of ${e.daily_target?.target||20} deliveries done</div>
-    </div>
-    <div class="card" style="background:var(--pl);border-color:var(--p)">
-      <div class="tsm fw7" style="color:var(--p)">⚡ Active Incentives</div>
-      ${(e.incentives||[]).filter(i=>i.active).map(i=>`<div class="tsm mt1">✅ ${i.name}: <strong>${i.multiplier||i.amount}</strong></div>`).join('')||'<div class="tsm tm mt1">No active surge right now</div>'}
-    </div>
-    <div class="fl g1 mt1">
+    <div class="fl g1 mt1 mb2">
       <button class="btn ba bblk" onclick="goOnline()">🟢 Go Online</button>
       <button class="btn bo bblk" onclick="goOffline()">🔴 Go Offline</button>
-    </div>`;
+    </div>
+    ${mine.length ? '<h2 class="st">🏍️ Mera Active Order</h2>'+mineHtml : ''}
+    <h2 class="st ${mine.length?'mt2':''}">📦 Available Orders</h2>
+    ${availHtml || '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Abhi koi naya order nahi hai</div>'}
+  `;
 },
-
 route: async () => {
   const res = await api('GET', '/api/delivery/route');
   const route = res.route || [];
@@ -1072,9 +1083,10 @@ async function placeOrder() {
   if (!token) { showToast('Order place karne ke liye pehle login karo'); closeModal('m-cart'); showScreen('login'); return; }
   const items = Object.values(cart).map(i => ({ product_id: i.id, qty: i.qty }));
   if (!items.length) { showToast('Cart is empty'); return; }
+  const address = document.getElementById('delivery-address')?.value?.trim();
+  if (!address) { showToast('📍 Delivery address daalo'); document.getElementById('delivery-address')?.focus(); return; }
   const res = await api('POST', '/api/orders', {
-    items,
-    address: user?.address || 'Flat 4B, Shastri Nagar, Jodhpur',
+    items, address,
     coupon_code: couponApplied?.code,
     payment_method: 'cod'
   });
@@ -1178,15 +1190,27 @@ function renderTracking(status) {
 function initMap() {
   const el = document.getElementById('map');
   if (!el || el._m) return;
-  try {
-    const m = L.map('map').setView([26.298, 73.018], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
-    L.marker([26.299, 73.019], { icon: L.divIcon({ html: '<div style="background:#2563EB;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">📍 You</div>', className: '' }) }).addTo(m);
-    const stores = [{name:'Gupta Kirana',lat:26.298,lng:73.018,e:'🌾'},{name:'Lakshmi General',lat:26.296,lng:73.022,e:'🛒'},{name:'Shyam Hardware',lat:26.302,lng:73.015,e:'🔧'},{name:'Saraswati Stationery',lat:26.299,lng:73.025,e:'✏️'},{name:'Aggarwal Wholesale',lat:26.294,lng:73.020,e:'📦'}];
-    stores.forEach(s => L.marker([s.lat, s.lng], { icon: L.divIcon({ html: `<div style="background:#fff;border:2px solid #2563EB;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap">${s.e} ${s.name.split(' ')[0]}</div>`, className: '' }) }).addTo(m).bindPopup(`<b>${s.name}</b>`));
-    L.circle([26.299, 73.019], { radius: 2000, color: '#2563EB', fillColor: '#2563EB', fillOpacity: 0.05, weight: 1 }).addTo(m);
-    el._m = m;
-  } catch (e) { el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Map loading...</div>'; }
+  const buildMap = (lat, lng) => {
+    try {
+      const m = L.map('map').setView([lat, lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
+      L.marker([lat, lng], { icon: L.divIcon({ html: '<div style="background:#2563EB;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">📍 Aap</div>', className: '' }) }).addTo(m);
+      L.circle([lat, lng], { radius: 2000, color: '#2563EB', fillColor: '#2563EB', fillOpacity: 0.05, weight: 1 }).addTo(m);
+      el._m = m;
+      // Shop markers backend se
+      api('GET', '/api/shops').then(r => {
+        (r.shops||[]).forEach(s => {
+          if (s.lat && s.lng) L.marker([s.lat, s.lng], { icon: L.divIcon({ html: '<div style="background:#fff;border:2px solid #2563EB;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap">'+s.emoji+' '+s.name.split(' ')[0]+'</div>', className: '' }) }).addTo(m).bindPopup('<b>'+s.name+'</b>');
+        });
+      });
+    } catch (e) { el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Map load nahi hua</div>'; }
+  };
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => buildMap(pos.coords.latitude, pos.coords.longitude),
+      () => buildMap(26.298, 73.018) // fallback to Jodhpur if GPS denied
+    );
+  } else { buildMap(26.298, 73.018); }
 }
 
 function initRouteMap() {
@@ -1491,6 +1515,18 @@ async function togglePromoStatus(id, cur) {
 // ════════════════════════════════════════════
 // DELIVERY ACTIONS
 // ════════════════════════════════════════════
+async function acceptOrder(orderId) {
+  const res = await api('POST', `/api/orders/${orderId}/accept`, {});
+  if (res.success) { showToast('✅ Order accept kar liya!'); showScreen('dlhome'); }
+  else showToast('❌ ' + res.message);
+}
+
+async function updateDlStatus(orderId, status) {
+  const res = await api('PUT', `/api/orders/${orderId}/status`, { status });
+  if (res.success) { showToast('✅ Status updated: ' + status.replace(/_/g,' ')); showScreen('dlhome'); }
+  else showToast('❌ ' + res.message);
+}
+
 async function goOnline() {
   // Try to get real GPS first
   if (navigator.geolocation) {
