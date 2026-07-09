@@ -374,6 +374,56 @@ function switchRole() {
   cart = {}; couponApplied = null; updateCF();
 }
 
+
+// ════════════════════════════════════════════
+// PUSH NOTIFICATIONS (mobile pe bhi aaye app band hone pe)
+// ════════════════════════════════════════════
+async function subscribePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !user) return;
+  try {
+    // Service worker register karo
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+
+    // Already subscribed? — skip karo
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      // Already hai — server pe save karo (refresh ke baad bhi)
+      await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, subscription: existing }) });
+      return;
+    }
+
+    // Permission maango
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') { console.log('[Push] Permission denied'); return; }
+
+    // VAPID public key server se lo
+    const keyRes = await fetch('/api/push/vapid-key').then(r => r.json());
+    if (!keyRes.success) return;
+
+    // Subscribe karo
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyRes.publicKey)
+    });
+
+    // Subscription server pe save karo
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, subscription: sub })
+    });
+    console.log('[Push] Subscribed ✅');
+  } catch (e) { console.warn('[Push] Setup failed:', e.message); }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
 function handleLogout() {
   if (!confirm('Logout karna chahte ho?')) return;
   token = null; user = null;
@@ -589,8 +639,8 @@ rewards: async () => {
     </div>
     <div class="g3c mb2">
       <div class="card" style="text-align:center;padding:.6rem"><div style="font-size:1.3rem;font-weight:800;color:var(--p)">${pts.toLocaleString()}</div><div class="txs tt">ZepCoins</div></div>
-      <div class="card" style="text-align:center;padding:.6rem"><div style="font-size:1.3rem;font-weight:800;color:var(--g)">8🔥</div><div class="txs tt">Day Streak</div></div>
-      <div class="card" style="text-align:center;padding:.6rem"><div style="font-size:1.3rem;font-weight:800;color:var(--a)">₹490</div><div class="txs tt">Total Saved</div></div>
+      <div class="card" style="text-align:center;padding:.6rem"><div style="font-size:1.3rem;font-weight:800;color:var(--g)">${user?.streak||0}🔥</div><div class="txs tt">Day Streak</div></div>
+      <div class="card" style="text-align:center;padding:.6rem"><div style="font-size:1.3rem;font-weight:800;color:var(--a)">₹${user?.total_saved||0}</div><div class="txs tt">Total Saved</div></div>
     </div>
     <h2 class="st">🎁 Redeem Rewards</h2>
     <div class="rgrid">
@@ -616,11 +666,10 @@ earn: async () => `
   <h2 class="st">💰 Ways to Earn Money</h2>
   <div style="background:linear-gradient(135deg,#065F46,#0D9488);color:#fff;border-radius:var(--rl);padding:1rem;margin-bottom:.75rem">
     <div style="font-size:.75rem;opacity:.8">Your Total Earnings This Month</div>
-    <div style="font-size:1.7rem;font-weight:800;margin:.25rem 0">₹4,280</div>
+    <div style="font-size:1.7rem;font-weight:800;margin:.25rem 0">₹${user?.total_earned||0}</div>
     <div class="fl g1" style="flex-wrap:wrap;margin-top:.4rem">
-      <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px;font-size:.68rem">💸 Cashback ₹1,840</span>
-      <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px;font-size:.68rem">👥 Referrals ₹1,200</span>
-      <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px;font-size:.68rem">🎰 Spin ₹340</span>
+      <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px;font-size:.68rem">💸 Order karo — ZepCoins kamao</span>
+      <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px;font-size:.68rem">👥 Refer karo — ₹200/referral</span>
     </div>
   </div>
   <div class="ref-box">
@@ -802,10 +851,9 @@ searn: async () => `
   <h2 class="st">💰 Earn More as Shop Owner</h2>
   <div style="background:linear-gradient(135deg,#065F46,#0D9488);color:#fff;border-radius:var(--rl);padding:1rem;margin-bottom:.75rem">
     <div style="font-size:.75rem;opacity:.8">Store Revenue This Month</div>
-    <div style="font-size:1.7rem;font-weight:800">₹2,14,500</div>
+    <div style="font-size:1.7rem;font-weight:800">₹0</div>
     <div class="fl g1 mt1" style="flex-wrap:wrap">
-      <span style="background:rgba(255,255,255,.2);padding:2px 7px;border-radius:20px;font-size:.67rem">📦 Online: ₹1,45,000</span>
-      <span style="background:rgba(255,255,255,.2);padding:2px 7px;border-radius:20px;font-size:.67rem">🏪 Walk-in: ₹69,500</span>
+      <span style="background:rgba(255,255,255,.2);padding:2px 7px;border-radius:20px;font-size:.67rem">📦 Real orders se revenue</span>
     </div>
   </div>
   ${[{i:'📣',t:'Boost Your Listing',d:'Appear at top of search. ₹99/week. Avg 3× more orders.',b:'Boost Now'},
@@ -1227,39 +1275,52 @@ function initRouteMap() {
 }
 
 function initOrderMap(orderId) {
-  const mapId = orderId ? `omap-${orderId}` : 'omap';
+  const mapId = orderId ? ('omap-' + orderId) : 'omap';
   const el = document.getElementById(mapId);
   if (!el || el._m) return;
-  try {
-    const m = L.map(mapId, { zoomControl: false }).setView([26.297, 73.020], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
-    L.marker([26.298, 73.018]).addTo(m).bindPopup('🏪 Store');
-    L.marker([26.296, 73.022]).addTo(m).bindPopup('🏠 Your Home');
-    const partnerIcon = L.divIcon({ html: '<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))">🏍️</div>', iconSize: [28, 28], className: '' });
-    const partnerMarker = L.marker([26.297, 73.020], { icon: partnerIcon }).addTo(m).bindPopup('🏍️ Delivery Partner');
-    el._m = m;
-    el._partnerMarker = partnerMarker;
 
-    // Register live location callback — updates this map's marker in real-time
-    _partnerMarkerCallback = (lat, lng, incomingOrderId) => {
-      if (incomingOrderId && orderId && incomingOrderId !== orderId) return;
-      if (el._partnerMarker) {
-        el._partnerMarker.setLatLng([lat, lng]);
+  // Customer ki real location se map start karo
+  const buildOrderMap = (myLat, myLng) => {
+    try {
+      const m = L.map(mapId, { zoomControl: false }).setView([myLat, myLng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
+
+      // Customer marker
+      L.marker([myLat, myLng], { icon: L.divIcon({ html: '<div style="background:#16A34A;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">🏠 Aap</div>', className: '' }) }).addTo(m);
+
+      // Delivery partner marker (placeholder — WS update se move karega)
+      const partnerIcon = L.divIcon({ html: '<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))">🏍️</div>', iconSize: [28, 28], className: '', iconAnchor: [14, 14] });
+      const partnerMarker = L.marker([myLat, myLng], { icon: partnerIcon }).addTo(m).bindPopup('🏍️ Delivery Partner');
+      el._m = m;
+      el._partnerMarker = partnerMarker;
+
+      // WS location callback — live marker update
+      _partnerMarkerCallback = (lat, lng, incomingOrderId) => {
+        if (incomingOrderId && orderId && incomingOrderId !== orderId) return;
+        partnerMarker.setLatLng([lat, lng]);
         m.panTo([lat, lng], { animate: true, duration: 0.5 });
-      }
-    };
+      };
 
-    // Also poll the track API every 10s as a fallback
-    el._pollInterval = setInterval(async () => {
-      if (!orderId) return;
-      try {
-        const t = await api('GET', `/api/orders/${orderId}/track`);
-        if (t.success && t.delivery_partner?.lat) {
-          el._partnerMarker?.setLatLng([t.delivery_partner.lat, t.delivery_partner.lng]);
-        }
-      } catch {}
-    }, 10000);
-  } catch (e) {}
+      // Fallback: poll /track every 8s (agar WS message miss ho jaaye)
+      if (orderId) {
+        el._pollInterval = setInterval(async () => {
+          try {
+            const t = await api('GET', '/api/orders/' + orderId + '/track');
+            if (t.success && t.delivery_partner?.lat) {
+              partnerMarker.setLatLng([t.delivery_partner.lat, t.delivery_partner.lng]);
+            }
+          } catch {}
+        }, 8000);
+      }
+    } catch (e) {}
+  };
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => buildOrderMap(pos.coords.latitude, pos.coords.longitude),
+      () => buildOrderMap(26.298, 73.018)
+    );
+  } else { buildOrderMap(26.298, 73.018); }
 }
 
 // ════════════════════════════════════════════
@@ -1581,7 +1642,7 @@ async function handleLogin() {
   const pwd = document.getElementById('li-pwd')?.value;
   if (!email || !pwd) { showToast('Enter email and password'); return; }
   const ok = await doLogin(email, pwd);
-  if (ok) { showToast('✅ Welcome back, ' + user.name + '!'); const first = NAVS[role][0].s; showScreen(first); }
+  if (ok) { showToast('✅ Welcome back, ' + user.name + '!'); connectWS(); subscribePush(); const first = NAVS[role][0].s; showScreen(first); }
 }
 async function handleRegister() {
   const name = document.getElementById('rg-name')?.value?.trim();
@@ -1609,7 +1670,7 @@ async function handleRegister() {
   if (!verifyRes.success) return showToast('❌ ' + verifyRes.message);
 
   const ok = await doRegister(name, email, phone, pwd, r);
-  if (ok) { const first = NAVS[role][0].s; showScreen(first); }
+  if (ok) { connectWS(); subscribePush(); const first = NAVS[role][0].s; showScreen(first); }
 }
 
 // Forgot password functions
@@ -1636,7 +1697,7 @@ async function resetPassword() {
 // ════════════════════════════════════════════
 // LIVE FEED
 // ════════════════════════════════════════════
-const FEED_MSGS = ['🌟 Mohan S. earned 200 ZepCoins','⚡ Flash: 30% off on Rice — 2 hrs left','🏍️ Rajan delivered 14 orders today','🎉 Priya M. won ₹50 coupon on Spin & Win','📦 New store: Meera Dairy now on Zepply','⭐ 5-star review for Gupta Kirana just posted'];
+const FEED_MSGS = ['⚡ Aaj ke liye flash deals available hain!','📦 Apne area mein naye stores join kar rahe hain','🎰 Daily spin karo — aaj ke prizes dekhte hain','⭐ Review do — ZepCoins kamao','🏍️ Fast delivery — order karo abhi'];
 let feedIdx = 0;
 function startHomeFeed() {
   const el = document.getElementById('live-feed-home');
@@ -1655,7 +1716,7 @@ function startHomeFeed() {
 function startLiveFeed() {
   const el = document.getElementById('live-feed-shop');
   if (!el) return;
-  const events = ['Rahul S. ordered Toor Dal','Priya M. earned 95 ZepCoins 🌟','Rajan delivered 3 orders in 18 min','5 new reviews this morning ⭐','Flash sale clicks: 234 in last hour'];
+  const events = ['Naya order aaya! 📦','Review mila ⭐','Delivery complete hui 🏍️','Naya user join hua 🎉','Stock update hua 📦'];
   let idx = 0;
   const add = () => {
     const item = document.createElement('div');
@@ -1714,16 +1775,23 @@ function connectWS() {
     ws.onmessage = e => {
       try {
         const d = JSON.parse(e.data);
-        if (d.type === 'order_confirmed' || d.type === 'status_update') {
-          showToast('🔔 ' + (d.message || 'Order update'));
+
+        // ── Notification toast + bell dot ──────────────────────
+        if (d.type === 'new_order' || d.type === 'order_confirmed' || d.type === 'status_update') {
+          showToast('🔔 ' + (d.message || 'Update'));
           const ndot = document.getElementById('ndot');
           if (ndot) ndot.style.display = 'block';
-          // Refresh order list if visible
-          if (document.getElementById('sorders')?.style.display !== 'none') {
-            showScreen('sorders');
+
+          // Auto-refresh current screen (bina tab badle)
+          const cur = document.querySelector('.ni.active')?.id?.replace('ni-', '');
+          if (cur) {
+            // Short delay so backend DB write completes first
+            setTimeout(() => showScreen(cur), 600);
           }
-        } else if (d.type === 'partner_location') {
-          // Live delivery partner location — update map marker if tracking UI is open
+        }
+
+        // ── Real-time delivery partner location (customer ke liye) ──
+        if (d.type === 'partner_location') {
           updatePartnerLocationOnMap(d.lat, d.lng, d.order_id);
         }
       } catch {}
