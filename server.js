@@ -7,6 +7,27 @@ const fs = require('fs');
 const WebSocket = require('ws');
 
 const db = require('./middleware/db');
+const webpush = require('web-push');
+
+// VAPID keys — Railway Variables mein set karo
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || 'BIm6FHpx1saLQE3JKEEi0JXqGO7gbA6ZkzcianTaO5wQtueh2i-ZWdIRkN_f76m1QJaL4vuoeDaRPuEbAHlPu7o';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || 'qqUyqa6THbdt__l07coMlvk1jsFR9CNYGSOjyTANsmQ';
+webpush.setVapidDetails('mailto:zepply@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE);
+
+// Push karo kisi bhi user ko
+async function sendPushNotification(userId, title, body, tag) {
+  try {
+    const subs = db.findAll ? db.findAll('push_subscriptions').filter(s => s.user_id === userId) : [];
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(JSON.parse(sub.subscription), JSON.stringify({ title, body, tag: tag || 'zepply', url: '/' }));
+      } catch (e) {
+        // Agar subscription expire ho gayi toh hata do
+        if (e.statusCode === 410) db.deleteById && db.deleteById('push_subscriptions', sub.id);
+      }
+    }
+  } catch (e) { console.error('Push error:', e.message); }
+}
 
 const authRoutes = require('./routes/auth');
 const shopsRoutes = require('./routes/shops');
@@ -30,6 +51,10 @@ app.use((req, _, next) => {
   next();
 });
 
+// wsBroadcast ko routes ke saath share karo via app.locals
+// (routes ko server.js import nahi karna padega — circular dependency avoid)
+app.use((req, _, next) => { req.wsBroadcast = wsBroadcast; req.sendPush = sendPushNotification; next(); });
+
 // MOUNT ALL ROUTES (modular — these contain all current fixes)
 app.use('/api/auth', authRoutes);
 app.use('/api/shops', shopsRoutes);
@@ -37,6 +62,22 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api', miscRoutes);
+
+// POST /api/push/subscribe — user apna push subscription save kare
+app.post('/api/push/subscribe', (req, res) => {
+  try {
+    const { userId, subscription } = req.body;
+    if (!userId || !subscription) return res.status(400).json({ success: false, message: 'userId and subscription required' });
+    // Purani subscription hata do pehle
+    const existing = db.findAll('push_subscriptions').filter(s => s.user_id === userId);
+    existing.forEach(s => db.deleteById && db.deleteById('push_subscriptions', s.id));
+    db.insert('push_subscriptions', { id: 'ps' + Date.now(), user_id: userId, subscription: JSON.stringify(subscription), created_at: new Date().toISOString() });
+    res.json({ success: true, message: 'Push subscription saved' });
+  } catch (e) { res.status(500).json({ success: false }); }
+});
+
+// GET /api/push/vapid-key — frontend ko public key do
+app.get('/api/push/vapid-key', (_, res) => res.json({ success: true, publicKey: VAPID_PUBLIC }));
 
 app.get('/api/health', (_, res) => res.json({
   status: 'ok', app: 'Zepply API', version: '2.1.0',
@@ -103,4 +144,4 @@ server.listen(PORT, () => {
   console.log('========================================\n');
 });
 
-module.exports = { app, wsBroadcast };
+module.exports = { app, wsBroadcast, sendPushNotification };
