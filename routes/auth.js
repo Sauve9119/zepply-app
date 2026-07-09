@@ -105,7 +105,7 @@ router.post('/register', async (req, res) => {
     const newUser = {
       id: 'u' + uid(), name, email, phone,
       password: hashed, role,
-      loyalty_points: 100, tier: 'bronze',
+      loyalty_points: 0, tier: 'bronze',
       referral_code: refCode,
       referred_by: referred_by || null,
       created_at: new Date().toISOString()
@@ -127,7 +127,7 @@ router.post('/register', async (req, res) => {
 
     // Delivery partner profile
     if (role === 'delivery') {
-      db.insert('delivery_partners', { id: 'dp' + uid(), user_id: newUser.id, status: 'active', rating: 5.0, total_deliveries: 0, total_earnings: 0, coins: 100, badge: 'bronze', created_at: new Date().toISOString() });
+      db.insert('delivery_partners', { id: 'dp' + uid(), user_id: newUser.id, status: 'active', rating: 0, total_deliveries: 0, total_earnings: 0, coins: 0, badge: 'bronze', created_at: new Date().toISOString() });
     }
 
     // Shop owner — auto-create their shop so products can be added right away
@@ -142,7 +142,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    db.insert('notifications', { id: 'n' + uid(), user_id: newUser.id, title: 'Zepply mein aapka swagat hai! 🎉', body: `Namaste ${name}! 100 ZepCoins welcome bonus mila.`, read: false, created_at: new Date().toISOString() });
+    db.insert('notifications', { id: 'n' + uid(), user_id: newUser.id, title: 'Zepply mein aapka swagat hai! 🎉', body: `Namaste ${name}! Order karo, review do aur doston ko refer karo — ZepCoins kamao!`, read: false, created_at: new Date().toISOString() });
 
     res.status(201).json({ success: true, message: 'Registration successful!', token: token(newUser.id), user: safe(newUser) });
   } catch (e) { console.error(e); res.status(500).json({ success: false, message: 'Server error' }); }
