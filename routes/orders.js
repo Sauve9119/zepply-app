@@ -198,13 +198,28 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     const tier = pts >= 10000 ? 'platinum' : pts >= 3000 ? 'gold' : pts >= 1000 ? 'silver' : 'bronze';
     db.updateById('users', req.user.id, { tier });
 
-    // Customer notification
+    // Customer notification — DB + WS
     db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: req.user.id, title: 'Order Confirmed! 🎉', body: `Order #${orderId} confirm hua. +${loyalty_earned} ZepCoins mile!`, read: false, created_at: new Date().toISOString() });
+    req.wsBroadcast(req.user.id, { type: 'order_confirmed', message: `✅ Order #${orderId.slice(-6).toUpperCase()} confirmed! +${loyalty_earned} coins`, order_id: orderId });
+    req.sendPush(req.user.id, 'Order Confirmed! 🎉', `Order #${orderId.slice(-6).toUpperCase()} place hua. +${loyalty_earned} ZepCoins!`, 'order');
+
+    // Shop owners ko notify karo (jinke products order mein hain)
+    const shopIdsInOrder = [...new Set(enrichedItems.map(i => i.shop_id))];
+    const allShops = db.findAll('shops').filter(s => shopIdsInOrder.includes(s.id));
+    for (const shop of allShops) {
+      const notifBody = `Naya order! #${orderId.slice(-6).toUpperCase()} — ₹${total} — ${enrichedItems.filter(i=>i.shop_id===shop.id).map(i=>i.product_name+' ×'+i.qty).join(', ')}`;
+      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: shop.owner_id, title: 'Naya Order Aaya! 🛒', body: notifBody, read: false, created_at: new Date().toISOString() });
+      req.wsBroadcast(shop.owner_id, { type: 'new_order', message: '🛒 ' + notifBody, order_id: orderId });
+      req.sendPush(shop.owner_id, 'Naya Order Aaya! 🛒', notifBody, 'new-order');
+    }
 
     // Saare active delivery partners ko notify karo
     const allPartners = db.find('delivery_partners', { status: 'active' });
     for (const dp of allPartners) {
-      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: dp.user_id, title: 'Naya Order Available! 📦', body: `Order #${orderId} — ₹${total} — Jaldi accept karo!`, read: false, created_at: new Date().toISOString() });
+      const dpBody = `Order #${orderId.slice(-6).toUpperCase()} — ₹${total} — Jaldi accept karo!`;
+      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: dp.user_id, title: 'Naya Order Available! 📦', body: dpBody, read: false, created_at: new Date().toISOString() });
+      req.wsBroadcast(dp.user_id, { type: 'new_order', message: '📦 ' + dpBody, order_id: orderId });
+      req.sendPush(dp.user_id, 'Naya Order! 📦', dpBody, 'new-order');
     }
 
     res.status(201).json({ success: true, order, message: `Order place hua! +${loyalty_earned} ZepCoins mile 🌟` });
@@ -271,6 +286,31 @@ router.put('/:id/status', auth, (req, res) => {
         db.increment('users', order.delivery_partner_id, 'loyalty_points', 55);
       }
     }
+
+    // Real-time broadcast via WebSocket + Push Notification
+    const statusLabels = {
+      preparing: 'Order prepare ho raha hai 🍳',
+      picked_up: 'Delivery partner ne pick up kar liya 📦',
+      out_for_delivery: 'Order raste mein hai! 🏍️',
+      delivered: 'Order deliver ho gaya! 🎉',
+      cancelled: 'Order cancel ho gaya ❌'
+    };
+    const wsMsg = statusLabels[status] || ('Order status: ' + status);
+    // Customer ko push
+    req.wsBroadcast(order.user_id, { type: 'status_update', message: wsMsg, status, order_id: order.id });
+    // Shop owners ko push
+    const shopIds = [...new Set((order.items||[]).map(i => i.shop_id))];
+    db.findAll('shops').filter(s => shopIds.includes(s.id)).forEach(s => {
+      req.wsBroadcast(s.owner_id, { type: 'status_update', message: 'Order #' + order.id.slice(-6).toUpperCase() + ': ' + wsMsg, status, order_id: order.id });
+    });
+    // Delivery partner ko push
+    if (order.delivery_partner_id) {
+      req.wsBroadcast(order.delivery_partner_id, { type: 'status_update', message: wsMsg, status, order_id: order.id });
+    }
+    // Mobile push — sabko
+    req.sendPush(order.user_id, 'Order Update 📦', wsMsg, 'status-' + status);
+    db.findAll('shops').filter(s => shopIds.includes(s.id)).forEach(s => req.sendPush(s.owner_id, 'Order Update', 'Order #' + order.id.slice(-6).toUpperCase() + ': ' + wsMsg, 'status'));
+    if (order.delivery_partner_id) req.sendPush(order.delivery_partner_id, 'Order Update', wsMsg, 'status');
 
     res.json({ success: true, order: updated });
   } catch (err) {
