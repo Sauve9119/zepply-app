@@ -108,3 +108,10 @@ router.get('/analytics/platform', (req, res) => {
 });
 
 module.exports = router;
+
+// GET /api/misc/razorpay-key — frontend ko public key do
+router.get('/razorpay-key', (_, res) => {
+  const key = process.env.RAZORPAY_KEY_ID;
+  if (!key) return res.json({ success: false, message: 'Razorpay not configured' });
+  res.json({ success: true, key });
+});
