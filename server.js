@@ -142,6 +142,20 @@ server.listen(PORT, () => {
   console.log(`API -> http://localhost:${PORT}/api`);
   console.log(`WS  -> ws://localhost:${PORT}`);
   console.log('========================================\n');
+
+  // Data persistence check
+  try {
+    const dbPath = require('path').join(__dirname, 'data/db.json');
+    const dbData = JSON.parse(require('fs').readFileSync(dbPath, 'utf8'));
+    const userCount = (dbData.users||[]).length;
+    const shopCount = (dbData.shops||[]).length;
+    const orderCount = (dbData.orders||[]).length;
+    console.log(`📊 DB Status: ${userCount} users, ${shopCount} shops, ${orderCount} orders`);
+    if (userCount === 0) {
+      console.log('⚠️  WARNING: Database is empty. If this is unexpected, data may have been reset.');
+      console.log('💡  TIP: Migrate to MongoDB Atlas for persistent storage.');
+    }
+  } catch(e) {}
 });
 
 module.exports = { app, wsBroadcast, sendPushNotification };
