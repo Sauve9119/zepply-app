@@ -555,9 +555,9 @@ home: async () => {
   const allProds = allProdsRes.products || [];
   return `
     <div class="sbanner">
-      <div><div style="font-weight:800;font-size:.95rem">🔥 Weekend Mega Sale</div>
-      <div style="font-size:.72rem;opacity:.85;margin-top:2px">Up to 40% off · Ends midnight</div></div>
-      <div class="sbadge">40% OFF</div>
+      <div><div style="font-weight:800;font-size:.95rem">🛒 Zepply — Hyperlocal Delivery</div>
+      <div style="font-size:.72rem;opacity:.85;margin-top:2px">Apne area ke stores se order karo</div></div>
+      <div class="sbadge">Fast 🚀</div>
     </div>
     <div class="sbar"><span>🔍</span><input placeholder="Search products, stores..." id="search-inp" oninput="filterProds(this.value)"></div>
     <div class="cscroll" id="cats">
@@ -602,9 +602,9 @@ orders: async () => {
       ${renderTracking(o.status)}
       <div class="div"></div>
       <div class="fl ic jb">
-        <div class="tsm"><div class="fw7">📞 ${o.delivery_partner_name||'Partner'}</div><div class="tm">${o.delivery_partner_phone||'Assigning...'} · ETA: ~20min</div></div>
+        <div class="tsm"><div class="fw7">🏍️ ${o.delivery_partner_name||'Partner assign ho raha hai...'}</div><div class="tm">${o.delivery_partner_phone||''}</div></div>
         <div class="fl g1">
-          ${o.delivery_partner_phone ? `<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm">📞 Call</a>` : '<button class="btn bo bsm" onclick="showToast(\'⏳ Partner assign ho raha hai...\')">📞</button>'}
+          ${o.delivery_partner_phone ? `<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Call Partner</a>` : '<span class="txs tt">⏳ Partner assign ho raha hai</span>'}
           <button class="btn bp bsm" onclick="currentOrderId='${o.id}';openModal('m-rate')">⭐ Rate</button>
         </div>
       </div>
@@ -657,12 +657,12 @@ earn: async () => `
     </div>
   </div>
   ${[
-    {i:'💸',bg:'#FFFBEB',t:'Cashback on Every Order',s:'2–10% back on every purchase automatically',rows:[['Grocery orders','2% cashback','tg'],['Hardware orders','4% cashback','tg'],['Wholesale orders','6% cashback','tg'],['Weekend bonus','+2% extra','tp']]},
+    {i:'💸',bg:'#FFFBEB',t:'ZepCoins Kamao',s:'Har order pe ZepCoins milte hain',rows:[['Har order pe','+coins','tg'],['Review dene pe','+coins','tg'],['Refer karne pe','+coins','tp']]},
     {i:'👥',bg:'#F5F3FF',t:'Refer & Earn',s:'No limit — refer 100 friends, earn ₹20,000',rows:[['Per customer referral','₹200','tp'],['Per shop owner referral','₹500','tp'],['Per delivery partner','₹300','tp'],['Is mahine','-','tt']]},
     {i:'🎰',bg:'#FDF2F8',t:'Spin & Win Daily',s:'3 free spins daily · Win up to ₹500 each',rows:[['Aaj bache',spinsLeft+' spins','tr'],['Spin karo','Win prizes','tw'],['Rewards','Coming Soon 🔜','tp']]},
     {i:'📝',bg:'var(--al)',t:'Review & Rate Products',s:'Get paid ZepCoins to share your opinion',rows:[['Text review (50+ words)','+25 ZepCoins','tg'],['Photo review','+50 ZepCoins','tg'],['Video review','+100 ZepCoins','tg']]},
-    {i:'🤝',bg:'#EFF6FF',t:'Become a Delivery Partner',s:'Earn ₹25,000–₹45,000/month',rows:[['Per delivery','₹35–₹80','tw'],['Daily potential','₹800–₹1,500','tw'],['Peak hour bonus','1.5× surge','tr'],['Bike insurance','FREE','tg']]},
-    {i:'🏪',bg:'#F5F3FF',t:'Open Your Shop on Zepply',s:'Sell to thousands of local customers',rows:[['Platform commission','Only 8%','tg'],['Avg shop earns/month','₹80k–₹2L','tp'],['Setup fee','₹0 — Free!','tg']]},
+    {i:'🏍️',bg:'#EFF6FF',t:'Delivery Partner Bano',s:'Apni marzi se kaam karo, apni timing',rows:[['Har delivery pe','Earning milti hai','tw'],['Jitne zyada orders','Utni zyada earning','tw'],['Rating achhi rakho','Regular orders milenge','tg']]},
+    {i:'🏪',bg:'#F5F3FF',t:'Apni Shop Kholo',s:'Local customers tak pahuncho',rows:[['Platform commission','Only 8%','tg'],['Setup fee','₹0 — Bilkul Free!','tg'],['Apni timing','Khud set karo','tp']]},
   ].map(e=>`<div class="earn-card">
     <div class="earn-hdr"><div class="earn-ico" style="background:${e.bg}">${e.i}</div><div><div class="earn-ttl">${e.t}</div><div class="earn-sub">${e.s}</div></div></div>
     <div class="earn-bdy">${e.rows.map(r=>`<div class="earn-row"><span class="tsm">${r[0]}</span><span class="tsm fw7 ${r[2]}">${r[1]}</span></div>`).join('')}
@@ -831,12 +831,12 @@ searn: async () => `
       <span style="background:rgba(255,255,255,.2);padding:2px 7px;border-radius:20px;font-size:.67rem">📦 Real orders se revenue</span>
     </div>
   </div>
-  ${[{i:'📣',t:'Boost Your Listing',d:'Appear at top of search. ₹99/week. Avg 3× more orders.',b:'Boost Now'},
-    {i:'📊',t:'Analytics Pro',d:'Deep sales insights, demand forecasting. ₹299/month.',b:'Try Free'},
+  ${[{i:'📣',t:'Apni Shop Promote Karo',d:'Zyada products add karo aur sahi categories set karo taaki search mein upar aao.',b:'Products Add Karo'},
+    {i:'📊',t:'Orders Track Karo',d:'Har order ka status check karo aur time pe prepare karo.',b:'Orders Dekho'},
     {i:'🤝',t:'Refer Other Shops',d:'Earn ₹500 for every shop owner you bring to Zepply.',b:'Get Link'},
     {i:'🏭',t:'Wholesale Channel',d:'Sell in bulk to retailers. Higher margins, dedicated listings.',b:'Enable'},
-    {i:'💳',t:'Zepply Credit',d:'Working capital loans up to ₹5L at 1.2%/month. Instant.',b:'Check'},
-    {i:'🌐',t:'Your Own WhatsApp Catalog',d:'We build you a branded ordering page. Free for Premium.',b:'Learn More'},
+    {i:'🤝',t:'Doston Ki Shop Laao',d:'Kisi aur shopkeeper ko Zepply pe laao — dono ko faayda hoga.',b:'Refer Karo'},
+    {i:'🌐',t:'WhatsApp Pe Share Karo',d:'Apni shop ka link WhatsApp pe share karo — zyada customers aayenge.',b:'Share Karo'},
   ].map(e=>`<div class="earn-card">
     <div class="earn-hdr"><div class="earn-ico" style="background:var(--s3)">${e.i}</div>
     <div><div class="earn-ttl">${e.t}</div><div class="earn-sub">${e.d}</div></div></div>
@@ -941,62 +941,40 @@ earns: async () => {
     <h2 class="st">Daily Breakdown</h2>
     <div class="card"><canvas id="earn-chart" height="110"></canvas></div>
     <div class="card" style="background:#FFFBEB;border-color:var(--g)">
-      <div class="fw7">💰 All Active Bonus Programs</div>
+      <div class="fw7">💡 Tips</div>
       <div class="tsm mt1" style="line-height:1.9">
-        🏆 20 deliveries/day = <strong>₹200 bonus</strong><br>
-        ⚡ Peak hours (6–9PM) = <strong>1.5× per delivery</strong><br>
-        ⭐ Rating 4.8+ = <strong>₹500/month</strong><br>
-        🌧️ Rain/Summer surge = <strong>2× earnings</strong><br>
-        📅 Weekend bonus = <strong>1.3× multiplier</strong>
+        ⚡ Busy hours pe zyada orders aate hain<br>
+        ⭐ Achhi rating se regular customers milte hain<br>
+        📦 Same area ke orders ek saath lo
       </div>
     </div>`;
 },
 
-dlrewards: async () => {
-  const res = await api('GET', '/api/delivery/earnings');
-  const e = res.earnings || {};
-  return `
-    <div class="lcard">
-      <div class="llbl">DeliveryCoins Balance</div>
-      <div class="lpts">🏆 ${(e.coins||0).toLocaleString()}</div>
-      <div style="margin-top:.6rem"><span class="ltier">🥇 Gold Partner</span></div>
-    </div>
-    <div class="rgrid">
-      ${[{c:500,n:'Fuel Voucher ₹200',d:'Indian Oil / HPCL'},{c:1000,n:'Free Helmet',d:'ISI certified'},{c:1500,n:'Mobile Recharge ₹500',d:'Any operator'},{c:2000,n:'Bike Service',d:'Partner garage'},{c:800,n:'Rain Gear Set',d:'Jacket + bag cover'},{c:300,n:'10 Extra Spins',d:'Spin & Win'}].map(r=>`
-      <div class="rcard">
-        <div class="rpts">🏆 ${r.c} pts</div><div class="rn">${r.n}</div><div class="rd">${r.d}</div>
-        <button class="btn bo bsm mt1" style="width:100%" onclick="showToast('✅ ${r.n} redeemed!')">Redeem</button>
-      </div>`).join('')}
-    </div>`;
-},
+dlrewards: async () => `
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:2rem">
+    <div style="font-size:4rem;margin-bottom:1rem">🏆</div>
+    <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:.5rem">Delivery Rewards Coming Soon!</h2>
+    <p style="color:var(--t2);font-size:.88rem;max-width:280px;line-height:1.6">Fuel vouchers, bonuses aur bahut kuch — jald launch ho raha hai. Tab tak deliver karte raho! 🏍️</p>
+  </div>`,
 
 dlearn: async () => `
-  <h2 class="st">💡 Earn More as Delivery Partner</h2>
+  <h2 class="st">💡 Zyada Kamao — Tips</h2>
   <div class="ec">
-    <div style="font-size:.75rem;opacity:.8">Your Daily Earnings Potential</div>
-    <div style="font-size:1.7rem;font-weight:800">Up to ₹1,800/day</div>
-    <div style="font-size:.75rem;opacity:.8;margin-top:.2rem">with all bonuses active</div>
+    <div style="font-size:.75rem;opacity:.8">Smart kaam karo</div>
+    <div style="font-size:1.2rem;font-weight:800">Har delivery pe zyada kamao</div>
   </div>
   ${[
-    {i:'⚡',t:'Peak Hour Blitz',d:'Earn 1.5× during 7–10 AM and 6–9 PM. Plan shifts smartly.',e:'₹500–800 extra/day'},
-    {i:'🏆',t:'Daily Challenge Bonus',d:'20 deliveries → ₹200. 30 deliveries → ₹500. Weekends: 15 → ₹300.',e:'Up to ₹500/day'},
-    {i:'👥',t:'Refer Delivery Partners',d:'₹300 for each new delivery partner you bring in.',e:'₹300/referral'},
-    {i:'⭐',t:'Rating Bonus',d:'4.8+ rating for 30 days = ₹500 bonus. 4.9+ = ₹800.',e:'₹500–800/month'},
-    {i:'🌧️',t:'Surge Pricing',d:'Rain, festivals, hot afternoons trigger 1.5–2× surge automatically.',e:'Up to 2× earnings'},
-    {i:'📦',t:'Multi-Store Bundle',d:'Zepply bundles earn base + ₹15 per extra store pickup.',e:'₹15 extra/store'},
-    {i:'🎓',t:'Train New Partners',d:'Become a training captain. Onboard 5/month = ₹2,000 bonus.',e:'₹2,000/month'},
+    {i:'⚡',t:'Busy Hours pe Online Raho',d:'Subah 8–10 aur Shaam 6–9 baje zyada orders aate hain. Isi waqt active raho.'},
+    {i:'🏆',t:'Jyada Orders = Jyada Earning',d:'Har order pe earning hoti hai. Jitne zyada orders utni earning.'},
+    {i:'⭐',t:'Rating Achhi Rakho',d:'Har delivery time pe karo, customer se politely baat karo — achhi rating milegi.'},
+    {i:'👥',t:'Doston Ko Refer Karo',d:'Naya delivery partner laao — bonus milega jab vo pehli delivery kare.'},
+    {i:'📦',t:'Ek Baar Mein Multiple Orders',d:'Same area ke orders saath lo — ek trip mein zyada kamao.'},
+    {i:'📱',t:'GPS On Rakho',d:'Location ON rakho taaki orders turant mile aur customer live track kar sake.'},
   ].map(e=>`<div class="earn-card">
     <div class="earn-hdr"><div class="earn-ico" style="background:var(--s3)">${e.i}</div>
-    <div style="flex:1"><div class="earn-ttl">${e.t}</div><div class="earn-sub">${e.d}</div></div></div>
-    <div style="padding:.3rem .95rem .75rem"><span class="tag tg">Earn: ${e.e}</span></div>
+    <div><div class="earn-ttl">${e.t}</div><div class="earn-sub">${e.d}</div></div></div>
   </div>`).join('')}
-  <h2 class="st">🧮 Earnings Calculator</h2>
-  <div class="card">
-    <div class="fg"><label>Deliveries per day: <span id="dv">15</span></label>
-    <input type="range" min="5" max="35" value="15" step="1" oninput="document.getElementById('dv').textContent=this.value;calcDlEarn(+this.value)"></div>
-    <div id="dl-calc" class="calc-box"></div>
-  </div>
-  <script>calcDlEarn(15);<\/script>`,
+`
 
 };
 
@@ -1367,7 +1345,7 @@ function drawRevChart() {
   const ctx = c.getContext('2d');
   const W = c.width = c.parentElement.offsetWidth || 300, H = 80;
   c.height = H + 28;
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], vals = [8200,9400,7800,11200,10500,14800,12450];
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], vals = [0,0,0,0,0,0,0]; // Real data coming soon
   const max = Math.max(...vals);
   ctx.clearRect(0, 0, W, H + 28);
   const bw = (W - 40) / days.length * .7, gap = (W - 40) / days.length;
@@ -1387,7 +1365,7 @@ function drawEarnChart() {
   const ctx = c.getContext('2d');
   const W = c.width = c.parentElement.offsetWidth || 300, H = 90;
   c.height = H + 28;
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], vals = [950,1200,880,1450,1100,1820,1280];
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], vals = [0,0,0,0,0,0,0]; // Real data loading...
   const max = Math.max(...vals);
   ctx.clearRect(0, 0, W, H + 28);
   ctx.strokeStyle = '#16A34A'; ctx.lineWidth = 2.5;
