@@ -132,12 +132,18 @@ router.post('/register', async (req, res) => {
 
     // Shop owner — auto-create their shop so products can be added right away
     if (role === 'shopowner') {
+      const { shop_name, shop_address, shop_category, shop_gst } = req.body;
       db.insert('shops', {
         id: 's' + uid(), owner_id: newUser.id,
-        name: name + ' Store', category: 'Grocery', description: '', emoji: '🏪',
-        address: 'Jodhpur, Rajasthan', lat: 26.298, lng: 73.018,
-        rating: 0, total_reviews: 0, is_open: true, delivery_time: '20 min',
-        min_order: 100, delivery_charge: 25, gst: '',
+        name: shop_name || (name + ' Store'),
+        category: shop_category || 'Grocery',
+        description: '', emoji: '🏪',
+        address: shop_address || '',
+        lat: null, lng: null,
+        rating: 0, total_reviews: 0, is_open: true,
+        delivery_time: '20-30 min',
+        min_order: 100, delivery_charge: 25,
+        gst: shop_gst || '',
         created_at: new Date().toISOString()
       });
     }
