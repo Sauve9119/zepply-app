@@ -55,8 +55,12 @@ router.get('/', auth, (req, res) => {
       ...o,
       customer_name: user?.name,
       customer_phone: user?.phone,
+      delivery_partner_name: o.delivery_partner_id ? (()=>{ const dp=db.findById('users',o.delivery_partner_id); return dp?.name; })() : null,
+      delivery_partner_phone: o.delivery_partner_id ? (()=>{ const dp=db.findById('users',o.delivery_partner_id); return dp?.phone; })() : null,
+      shop_owner_phone: (()=>{ const shopId=(o.items||[])[0]?.shop_id; const shop=shopId?db.findById('shops',shopId):null; const owner=shop?db.findById('users',shop.owner_id):null; return owner?.phone; })(),
+      shop_owner_name: (()=>{ const shopId=(o.items||[])[0]?.shop_id; const shop=shopId?db.findById('shops',shopId):null; const owner=shop?db.findById('users',shop.owner_id):null; return owner?.name; })(),
+      shop_address: (()=>{ const shopId=(o.items||[])[0]?.shop_id; const shop=shopId?db.findById('shops',shopId):null; return shop?.address; })(),
       items,
-      // Delivery ko batao ki ye order available hai ya unka assigned hai
       is_available: !o.delivery_partner_id,
       is_mine: o.delivery_partner_id === req.user.id
     };
