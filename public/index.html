@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zepply — Hyperlocal Delivery</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 :root{--p:#2563EB;--pl:#EFF6FF;--pd:#1D4ED8;--a:#16A34A;--al:#F0FDF4;--w:#D97706;--wl:#FFFBEB;--d:#DC2626;--dl:#FEF2F2;--g:#F59E0B;--pu:#7C3AED;--pk:#DB2777;--s:#fff;--s2:#F8FAFC;--s3:#F1F5F9;--b:#E2E8F0;--bs:#CBD5E1;--t:#0F172A;--t2:#475569;--t3:#94A3B8;--r:12px;--rs:8px;--rl:16px;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -170,7 +168,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 /* ORDER STATUS COLORS */
 .status-confirmed{color:#2563EB;}.status-preparing{color:#D97706;}.status-picked_up{color:#7C3AED;}.status-out_for_delivery{color:#DB2777;}.status-delivered{color:#16A34A;}.status-cancelled{color:#DC2626;}
 /* MAP */
-#map,[id^="omap"],#rmap{border-radius:var(--r);border:1px solid var(--b);}
+#map,[id^="omap"],#rmap{border-radius:var(--r);border:1px solid var(--b);overflow:hidden;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-thumb{background:var(--bs);border-radius:2px;}
 @media(max-width:480px){.sg{grid-template-columns:1fr 1fr;}.rg{grid-template-columns:1fr;}.g2c{grid-template-columns:1fr;}.rgrid{grid-template-columns:1fr;}.g4c{grid-template-columns:1fr 1fr;}}
@@ -281,6 +279,16 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   <button class="btn bo bblk mt1" onclick="closeModal('m-chal')">Close</button>
 </div></div>
 
+<div class="mo" id="m-item-req"><div class="ms"><div class="mh"></div>
+  <h2 class="st">🙋 Item Request Karo</h2>
+  <div class="tsm tm mb2">Jo item aapko chahiye aur available nahi hai — shop owners 24 ghante mein reply karenge</div>
+  <div class="fg"><label>Item ka Naam *</label><input id="ir-name" placeholder="Jaise: Tata Salt 1kg, Colgate 200g"></div>
+  <div class="fg"><label>Kitna chahiye?</label><input type="number" id="ir-qty" value="1" min="1" style="width:80px"></div>
+  <div class="fg"><label>Koi aur info (optional)</label><textarea id="ir-desc" rows="2" placeholder="Brand, size, ya koi khaas zaroorat..."></textarea></div>
+  <button class="btn bp bblk mt1" onclick="submitItemRequest()">Request Bhejo (24hr) →</button>
+  <button class="btn bo bblk mt1" onclick="closeModal('m-item-req')">Cancel</button>
+</div></div>
+
 <div id="toast"></div>
 
 <script>
@@ -323,6 +331,11 @@ async function doLogin(email, pwd) {
 
 async function doRegister(name, email, phone, pwd, r) {
   const res = await api('POST', '/api/auth/register', { name, email, phone, password: pwd, role: r }, false);
+  if (res.success) { token = res.token; user = res.user; showToast('🎉 ' + res.message); return true; }
+  showToast('❌ ' + res.message); return false;
+}
+async function doRegisterWithExtra(name, email, phone, pwd, r, extra) {
+  const res = await api('POST', '/api/auth/register', { name, email, phone, password: pwd, role: r, ...extra }, false);
   if (res.success) { token = res.token; user = res.user; showToast('🎉 ' + res.message); return true; }
   showToast('❌ ' + res.message); return false;
 }
@@ -520,6 +533,12 @@ login: async () => `
         <div style="font-weight:500;font-size:14px;" id="reg-role-display">Customer</div>
         <input type="hidden" id="rg-role">
       </div>
+      <div id="shopowner-fields" style="display:none">
+        <div class="fg"><label>Shop ka Naam</label><input id="rg-shop-name" placeholder="Jaise: Gupta Kirana, Sharma Electronics"></div>
+        <div class="fg"><label>Shop ki Category</label><select id="rg-shop-cat"><option>Grocery</option><option>Hardware</option><option>Stationery</option><option>Vegetables</option><option>Wholesale</option><option>Electronics</option><option>Medical</option><option>Other</option></select></div>
+        <div class="fg"><label>Shop ka Pata (Address)</label><textarea id="rg-shop-address" rows="2" placeholder="Jaise: 12B, Main Market, Jodhpur - 342001"></textarea></div>
+        <div class="fg"><label>GST Number (agar hai toh)</label><input id="rg-gst" placeholder="22AAAAA0000A1Z5 (optional)"></div>
+      </div>
       <div id="otp-step" style="display:none" class="fg">
         <label>Email OTP</label>
         <input id="rg-otp" type="number" placeholder="6 digit OTP daalo">
@@ -549,7 +568,8 @@ login: async () => `
 
 // CUSTOMER HOME
 home: async () => {
-  const shopsRes = await api('GET', '/api/shops?lat=26.298&lng=73.018&radius=5');
+  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:26.298,lng:73.018})) : r({lat:26.298,lng:73.018}));
+  const shopsRes = await api('GET', '/api/shops?lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=5');
   const allProdsRes = await api('GET', '/api/shops/all/products');
   const shops = shopsRes.shops || [];
   const allProds = allProdsRes.products || [];
@@ -566,13 +586,19 @@ home: async () => {
       ).join('')}
     </div>
     <div id="live-feed-home"></div>
+    <div class="card" style="background:var(--pl);border-color:var(--p);display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+      <div style="font-size:1.5rem">🙋</div>
+      <div style="flex:1"><div class="fw7 tsm" style="color:var(--p)">Apna Item Request Karo</div><div class="txs tm">Jo item nahi mil raha — 24 ghante mein shop owner respond karenge</div></div>
+      <button class="btn bp bsm" onclick="openItemRequest()">Request →</button>
+    </div>
     <div id="stores-list">${shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('')}</div>
     <script>startHomeFeed();<\/script>`;
 },
 
 // STORES MAP
 stores: async () => {
-  const res = await api('GET', '/api/shops?lat=26.298&lng=73.018&radius=5');
+  const coords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:26.298,lng:73.018})) : r({lat:26.298,lng:73.018}));
+  const res = await api('GET', '/api/shops?lat='+coords.lat+'&lng='+coords.lng+'&radius=5');
   const shops = res.shops || [];
   return `
     <h2 class="st">🗺️ Stores Near You</h2>
@@ -604,7 +630,8 @@ orders: async () => {
       <div class="fl ic jb">
         <div class="tsm"><div class="fw7">🏍️ ${o.delivery_partner_name||'Partner assign ho raha hai...'}</div><div class="tm">${o.delivery_partner_phone||''}</div></div>
         <div class="fl g1">
-          ${o.delivery_partner_phone ? `<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Call Partner</a>` : '<span class="txs tt">⏳ Partner assign ho raha hai</span>'}
+          ${o.delivery_partner_phone ? `<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Partner</a>` : '<span class="txs tt">⏳ Partner assign ho raha hai</span>'}
+          ${o.shop_owner_phone ? `<a href="tel:${o.shop_owner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Shop</a>` : ''}
           <button class="btn bp bsm" onclick="currentOrderId='${o.id}';openModal('m-rate')">⭐ Rate</button>
         </div>
       </div>
@@ -876,13 +903,13 @@ dlhome: async () => {
       <div style="font-size:.75rem;opacity:.8">Today's Earnings</div>
       <div style="font-size:1.7rem;font-weight:800">₹${(e.today?.total||0).toLocaleString()}</div>
       <div class="fl g2 mt1" style="font-size:.75rem;opacity:.85">
-        <span>📦 ${e.today?.deliveries||0} deliveries</span><span>⭐ ${e.rating||0} rating</span><span>🏅 ${e.badge||'bronze'}</span>
+        <span>📦 ${e.today?.deliveries||0} deliveries</span><span>⭐ ${e.rating>0?e.rating:'New'} rating</span><span>💰 ₹30/delivery</span>
       </div>
     </div>
     <div class="g4c">
       <div class="sb"><div class="sv">${e.today?.deliveries||0}</div><div class="sl">Today</div></div>
       <div class="sb"><div class="sv">${e.rating||0}⭐</div><div class="sl">Rating</div></div>
-      <div class="sb"><div class="sv">₹${e.today?.deliveries>0?Math.round((e.today?.total||0)/(e.today?.deliveries||1)):0}</div><div class="sl">Per Del</div></div>
+      <div class="sb"><div class="sv">₹30</div><div class="sl">Per Del</div></div>
       <div class="sb"><div class="sv">${available.length}</div><div class="sl">Available</div></div>
     </div>
     <div class="fl g1 mt1 mb2">
@@ -930,7 +957,7 @@ earns: async () => {
     <div class="ec" style="text-align:center">
       <div style="font-size:.75rem;opacity:.8">This Month Total</div>
       <div style="font-size:1.9rem;font-weight:800">₹${(e.month?.total||0).toLocaleString()}</div>
-      <div style="font-size:.75rem;opacity:.8;margin-top:.2rem">Avg ₹${e.month?.avg_per_delivery||0}/delivery</div>
+      <div style="font-size:.75rem;opacity:.8;margin-top:.2rem">₹30/delivery · ${e.month?.deliveries||0} deliveries</div>
     </div>
     <div class="g4c">
       <div class="sb"><div class="sv">${e.month?.deliveries||0}</div><div class="sl">Deliveries</div></div>
@@ -1250,90 +1277,60 @@ function renderTracking(status) {
 // ════════════════════════════════════════════
 function initMap() {
   const el = document.getElementById('map');
-  if (!el || el._m) return;
+  if (!el || el._done) return;
+  el._done = true;
   const buildMap = (lat, lng) => {
-    try {
-      const m = L.map('map').setView([lat, lng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
-      L.marker([lat, lng], { icon: L.divIcon({ html: '<div style="background:#2563EB;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">📍 Aap</div>', className: '' }) }).addTo(m);
-      L.circle([lat, lng], { radius: 2000, color: '#2563EB', fillColor: '#2563EB', fillOpacity: 0.05, weight: 1 }).addTo(m);
-      el._m = m;
-      // Shop markers backend se
-      api('GET', '/api/shops').then(r => {
-        (r.shops||[]).forEach(s => {
-          if (s.lat && s.lng) L.marker([s.lat, s.lng], { icon: L.divIcon({ html: '<div style="background:#fff;border:2px solid #2563EB;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap">'+s.emoji+' '+s.name.split(' ')[0]+'</div>', className: '' }) }).addTo(m).bindPopup('<b>'+s.name+'</b>');
-        });
-      });
-    } catch (e) { el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Map load nahi hua</div>'; }
+    // Google Maps Embed — no API key needed for basic embed
+    const key = window.GOOGLE_MAPS_KEY || '';
+    if (key) {
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" allowfullscreen src="https://www.google.com/maps/embed/v1/search?key='+key+'&q=shops+near+me&center='+lat+','+lng+'&zoom=14"></iframe>';
+    } else {
+      // Fallback: OpenStreetMap iframe (no key needed)
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(lng-0.02)+','+(lat-0.02)+','+(lng+0.02)+','+(lat+0.02)+'&layer=mapnik&marker='+lat+','+lng+'" allowfullscreen></iframe>';
+    }
+    // Show nearby shops below map from API
+    api('GET', '/api/shops').then(r => {
+      const shops = r.shops || [];
+      const nearby = document.getElementById('stores-list');
+      if (nearby && shops.length === 0) nearby.innerHTML = '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Aapke area mein abhi koi shop nahi hai</div>';
+    });
   };
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      pos => buildMap(pos.coords.latitude, pos.coords.longitude),
-      () => buildMap(26.298, 73.018) // fallback to Jodhpur if GPS denied
-    );
+    navigator.geolocation.getCurrentPosition(pos => buildMap(pos.coords.latitude, pos.coords.longitude), () => buildMap(26.298, 73.018));
   } else { buildMap(26.298, 73.018); }
 }
 
 function initRouteMap() {
   const el = document.getElementById('rmap');
-  if (!el || el._m) return;
-  try {
-    const m = L.map('rmap').setView([26.298, 73.020], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
-    const pts = [[26.299,73.019],[26.298,73.018],[26.296,73.022],[26.300,73.017],[26.295,73.024]];
-    L.polyline(pts, { color: '#2563EB', weight: 3, opacity: .8, dashArray: '8,4' }).addTo(m);
-    ['📍','P','P','D','D'].forEach((l, i) => L.marker(pts[i], { icon: L.divIcon({ html: `<div style="background:${i===0?'#16A34A':i<=2?'#2563EB':'#D97706'};color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.2)">${l}</div>`, className: '', iconAnchor: [11, 11] }) }).addTo(m));
-    el._m = m;
-  } catch (e) {}
+  if (!el || el._done) return;
+  el._done = true;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(pos.coords.longitude-0.02)+','+(pos.coords.latitude-0.02)+','+(pos.coords.longitude+0.02)+','+(pos.coords.latitude+0.02)+'&layer=mapnik&marker='+pos.coords.latitude+','+pos.coords.longitude+'" allowfullscreen></iframe>';
+    }, () => {
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik&marker=26.298,73.018" allowfullscreen></iframe>';
+    });
+  } else {
+    el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik&marker=26.298,73.018" allowfullscreen></iframe>';
+  }
 }
 
 function initOrderMap(orderId) {
   const mapId = orderId ? ('omap-' + orderId) : 'omap';
   const el = document.getElementById(mapId);
-  if (!el || el._m) return;
-
-  // Customer ki real location se map start karo
-  const buildOrderMap = (myLat, myLng) => {
-    try {
-      const m = L.map(mapId, { zoomControl: false }).setView([myLat, myLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(m);
-
-      // Customer marker
-      L.marker([myLat, myLng], { icon: L.divIcon({ html: '<div style="background:#16A34A;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">🏠 Aap</div>', className: '' }) }).addTo(m);
-
-      // Delivery partner marker (placeholder — WS update se move karega)
-      const partnerIcon = L.divIcon({ html: '<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))">🏍️</div>', iconSize: [28, 28], className: '', iconAnchor: [14, 14] });
-      const partnerMarker = L.marker([myLat, myLng], { icon: partnerIcon }).addTo(m).bindPopup('🏍️ Delivery Partner');
-      el._m = m;
-      el._partnerMarker = partnerMarker;
-
-      // WS location callback — live marker update
-      _partnerMarkerCallback = (lat, lng, incomingOrderId) => {
-        if (incomingOrderId && orderId && incomingOrderId !== orderId) return;
-        partnerMarker.setLatLng([lat, lng]);
-        m.panTo([lat, lng], { animate: true, duration: 0.5 });
-      };
-
-      // Fallback: poll /track every 8s (agar WS message miss ho jaaye)
-      if (orderId) {
-        el._pollInterval = setInterval(async () => {
-          try {
-            const t = await api('GET', '/api/orders/' + orderId + '/track');
-            if (t.success && t.delivery_partner?.lat) {
-              partnerMarker.setLatLng([t.delivery_partner.lat, t.delivery_partner.lng]);
-            }
-          } catch {}
-        }, 8000);
-      }
-    } catch (e) {}
-  };
-
+  if (!el || el._done) return;
+  el._done = true;
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      pos => buildOrderMap(pos.coords.latitude, pos.coords.longitude),
-      () => buildOrderMap(26.298, 73.018)
-    );
-  } else { buildOrderMap(26.298, 73.018); }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(lng-0.02)+','+(lat-0.02)+','+(lng+0.02)+','+(lat+0.02)+'&layer=mapnik&marker='+lat+','+lng+'" allowfullscreen></iframe>';
+    }, () => {
+      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik" allowfullscreen></iframe>';
+    });
+  } else {
+    el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Location access de kar live tracking dekho</div>';
+  }
+  _partnerMarkerCallback = () => {};
 }
 
 // ════════════════════════════════════════════
@@ -1653,6 +1650,9 @@ function switchAuthTab(tab) {
       if (roleDisplay) roleDisplay.textContent = role === 'customer' ? '🛒 Customer' : role === 'shopowner' ? '🏪 Shop Owner' : '🏍️ Delivery Partner';
     }, 50);
   }
+  // Shopowner extra fields toggle
+  const sof = document.getElementById('shopowner-fields');
+  if (sof) sof.style.display = (tab === 'register' && role === 'shopowner') ? 'block' : 'none';
   document.getElementById('tab-login')?.classList.toggle('active', tab === 'login');
   document.getElementById('tab-register')?.classList.toggle('active', tab === 'register');
   document.getElementById('tab-forgot')?.classList.toggle('active', tab === 'forgot');
@@ -1680,7 +1680,12 @@ async function handleRegister() {
   // Step 1: OTP send karo
   const otpStep = document.getElementById('otp-step');
   if (!otpStep || otpStep.style.display === 'none') {
-    const res = await api('POST', '/api/auth/send-otp', { email }, false);
+    // Shopowner fields validate karo
+  if (r === 'shopowner') {
+    const shopAddr = document.getElementById('rg-shop-address')?.value?.trim();
+    if (!shopAddr) return showToast('Shop ka address daalo');
+  }
+  const res = await api('POST', '/api/auth/send-otp', { email }, false);
     if (!res.success) return showToast('❌ ' + res.message);
     showToast('📧 OTP bheja gaya ' + email + ' pe!');
     if (otpStep) otpStep.style.display = 'block';
@@ -1693,7 +1698,13 @@ async function handleRegister() {
   const verifyRes = await api('POST', '/api/auth/verify-otp', { email, otp }, false);
   if (!verifyRes.success) return showToast('❌ ' + verifyRes.message);
 
-  const ok = await doRegister(name, email, phone, pwd, r);
+  const extraData = r === 'shopowner' ? {
+    shop_name: document.getElementById('rg-shop-name')?.value?.trim(),
+    shop_address: document.getElementById('rg-shop-address')?.value?.trim(),
+    shop_category: document.getElementById('rg-shop-cat')?.value,
+    shop_gst: document.getElementById('rg-gst')?.value?.trim()
+  } : {};
+  const ok = await doRegisterWithExtra(name, email, phone, pwd, r, extraData);
   if (ok) { connectWS(); subscribePush(); const first = NAVS[role][0].s; showScreen(first); }
 }
 
@@ -1756,6 +1767,21 @@ function startLiveFeed() {
 // ════════════════════════════════════════════
 // REFERRAL
 // ════════════════════════════════════════════
+function openItemRequest() {
+  if (!token) { showToast('Pehle login karo'); showScreen('login'); return; }
+  openModal('m-item-req');
+}
+
+async function submitItemRequest() {
+  const name = document.getElementById('ir-name')?.value?.trim();
+  const qty = document.getElementById('ir-qty')?.value || 1;
+  const desc = document.getElementById('ir-desc')?.value?.trim();
+  if (!name) return showToast('Item ka naam daalo');
+  const res = await api('POST', '/api/item-requests', { item_name: name, quantity: +qty, description: desc });
+  if (res.success) { showToast('✅ ' + res.message); closeModal('m-item-req'); }
+  else showToast('❌ ' + res.message);
+}
+
 function copyRef() {
   const code = user?.referral_code || '';
   const link = location.origin + '?ref=' + code;
@@ -1822,7 +1848,9 @@ function connectWS() {
 
         // ── Notification toast + bell dot ──────────────────────
         if (d.type === 'new_order' || d.type === 'order_confirmed' || d.type === 'status_update') {
-          showToast('🔔 ' + (d.message || 'Update'));
+          // Role-specific prefix
+          const prefix = role === 'shopowner' ? '🛒 ' : role === 'delivery' ? '🏍️ ' : '📦 ';
+          showToast(prefix + (d.message || 'Update'));
           const ndot = document.getElementById('ndot');
           if (ndot) ndot.style.display = 'block';
 
