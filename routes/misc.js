@@ -115,3 +115,38 @@ router.get('/razorpay-key', (_, res) => {
   if (!key) return res.json({ success: false, message: 'Razorpay not configured' });
   res.json({ success: true, key });
 });
+
+// POST /api/item-requests — customer item request kare
+router.post('/item-requests', auth, (req, res) => {
+  const { item_name, description, quantity } = req.body;
+  if (!item_name) return res.status(400).json({ success: false, message: 'Item name required' });
+  const { v4: uuidv4 } = require('uuid');
+  const request = {
+    id: 'ir' + uuidv4().slice(0, 8),
+    user_id: req.user.id,
+    user_name: req.user.name,
+    item_name, description: description || '', quantity: quantity || 1,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 24*60*60*1000).toISOString()
+  };
+  if (!db.findAll('item_requests')) db.data.item_requests = [];
+  db.insert('item_requests', request);
+  // Saare shop owners ko notify karo
+  const shops = db.findAll('shops');
+  const notified = new Set();
+  shops.forEach(s => {
+    if (!notified.has(s.owner_id)) {
+      db.insert('notifications', { id: 'n'+uuidv4().slice(0,8), user_id: s.owner_id, title: '🙋 Item Request', body: req.user.name+' chahta hai: '+item_name+(quantity>1?' ('+quantity+'x)':''), read: false, created_at: new Date().toISOString() });
+      notified.add(s.owner_id);
+    }
+  });
+  res.json({ success: true, message: 'Request bhej di! Shop owners 24 ghante mein respond karenge.', request });
+});
+
+// GET /api/item-requests — shop owners ko requests dikhao
+router.get('/item-requests', auth, (req, res) => {
+  let requests = (db.findAll('item_requests') || []).filter(r => new Date(r.expires_at) > new Date());
+  if (req.user.role === 'customer') requests = requests.filter(r => r.user_id === req.user.id);
+  res.json({ success: true, requests });
+});
