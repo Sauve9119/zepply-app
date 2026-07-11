@@ -73,7 +73,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   // Collect drops
   const drops = orders.map(o => {
     const user = db.findById('users', o.user_id);
-    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: 26.295 + Math.random() * 0.01, lng: 73.018 + Math.random() * 0.01, phone: user?.phone, earning: 55 };
+    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: 30 };
   });
 
   // Simple TSP: sort pickups by proximity to current location, then drops
@@ -81,7 +81,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const allStops = [...pickups, ...drops];
   const totalDist = (allStops.length * 0.6).toFixed(1);
   const totalTime = Math.ceil(allStops.length * 5) + ' min';
-  const totalEarning = drops.length * 55 + (drops.length >= 5 ? 200 : 0);
+  const totalEarning = drops.length * 30;
 
   res.json({
     success: true,
@@ -112,16 +112,16 @@ router.get('/earnings', auth, requireRole('delivery'), (req, res) => {
   weekStart.setDate(weekStart.getDate() - 7);
 
   const earnings = {
-    today: { deliveries: todayOrders.length, base: todayOrders.length * 55, bonus: todayOrders.length >= 20 ? 200 : 0, tips: todayOrders.length * 12, total: todayOrders.length * 67 + (todayOrders.length >= 20 ? 200 : 0) },
+    today: { deliveries: todayOrders.length, base: todayOrders.length * 30, bonus: 0, tips: 0, total: todayOrders.length * 30 },
     month: { deliveries: dp.total_deliveries, total: dp.total_earnings, avg_per_delivery: dp.total_deliveries > 0 ? Math.round(dp.total_earnings / dp.total_deliveries) : 0 },
     daily_target: { target: 20, current: todayOrders.length, bonus_on_completion: 200 },
-    rating: dp.rating || 4.9,
+    rating: dp.rating || 0,
     coins: dp.coins || 0,
     badge: dp.badge || 'bronze',
     incentives: [
       { name: 'Peak Hour (6-9PM)', multiplier: '1.5×', active: true },
       { name: 'Rain Surge', multiplier: '2×', active: false },
-      { name: 'Rating Bonus (4.8+)', amount: '₹500/month', active: dp.rating >= 4.8 },
+      
       { name: 'Weekend Bonus', multiplier: '1.3×', active: new Date().getDay() >= 5 }
     ]
   };
