@@ -217,14 +217,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       req.sendPush(shop.owner_id, 'Naya Order Aaya! 🛒', notifBody, 'new-order');
     }
 
-    // Saare active delivery partners ko notify karo
-    const allPartners = db.find('delivery_partners', { status: 'active' });
-    for (const dp of allPartners) {
-      const dpBody = `Order #${orderId.slice(-6).toUpperCase()} — ₹${total} — Jaldi accept karo!`;
-      db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: dp.user_id, title: 'Naya Order Available! 📦', body: dpBody, read: false, created_at: new Date().toISOString() });
-      req.wsBroadcast(dp.user_id, { type: 'new_order', message: '📦 ' + dpBody, order_id: orderId });
-      req.sendPush(dp.user_id, 'Naya Order! 📦', dpBody, 'new-order');
-    }
+    // Delivery partners ko notify NAHI karenge abhi — shop owner accept karne ke baad karenge
 
     res.status(201).json({ success: true, order, message: `Order place hua! +${loyalty_earned} ZepCoins mile 🌟` });
   } catch (err) {
@@ -291,6 +284,19 @@ router.put('/:id/status', auth, (req, res) => {
       }
     }
 
+    // Jab shop owner 'preparing' status set kare toh delivery partners ko notify karo
+    if (status === 'preparing') {
+      const allPartners = db.findAll('delivery_partners').filter(dp => dp.status === 'active');
+      const orderShops = [...new Set((order.items||[]).map(i=>i.shop_id))];
+      const shopNames = orderShops.map(sid=>{ const s=db.findById('shops',sid); return s?.name||'Shop'; }).join(', ');
+      for (const dp of allPartners) {
+        const dpBody = `Order #${order.id.slice(-6).toUpperCase()} ready for pickup — ${shopNames} — ₹${order.total}`;
+        db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: dp.user_id, title: '📦 New Order Available!', body: dpBody, read: false, created_at: new Date().toISOString() });
+        req.wsBroadcast(dp.user_id, { type: 'new_order', message: '📦 ' + dpBody, order_id: order.id });
+        req.sendPush(dp.user_id, 'New Order Available! 📦', dpBody, 'new-order');
+      }
+    }
+
     // Real-time broadcast via WebSocket + Push Notification
     const statusLabels = {
       preparing: 'Order prepare ho raha hai 🍳',
@@ -339,7 +345,7 @@ router.get('/:id/track', auth, (req, res) => {
   const partner = order.delivery_partner_id ? db.findById('users', order.delivery_partner_id) : null;
   const dp = order.delivery_partner_id ? db.findOne('delivery_partners', { user_id: order.delivery_partner_id }) : null;
 
-  res.json({ success: true, order_id: order.id, status: order.status, timeline, estimated_delivery: order.estimated_delivery, delivery_partner: partner ? { name: partner.name, phone: partner.phone, rating: dp?.rating || 4.9, vehicle: dp?.vehicle, lat: 26.297 + (Math.random() - 0.5) * 0.005, lng: 73.020 + (Math.random() - 0.5) * 0.005 } : null });
+  res.json({ success: true, order_id: order.id, status: order.status, timeline, estimated_delivery: order.estimated_delivery, delivery_partner: partner ? { name: partner.name, phone: partner.phone, rating: dp?.rating || 4.9, vehicle: dp?.vehicle, lat: dp?.lat || null, lng: dp?.lng || null } : null });
 });
 
 module.exports = router;
