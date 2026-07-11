@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zepply — Hyperlocal Delivery</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 :root{--p:#2563EB;--pl:#EFF6FF;--pd:#1D4ED8;--a:#16A34A;--al:#F0FDF4;--w:#D97706;--wl:#FFFBEB;--d:#DC2626;--dl:#FEF2F2;--g:#F59E0B;--pu:#7C3AED;--pk:#DB2777;--s:#fff;--s2:#F8FAFC;--s3:#F1F5F9;--b:#E2E8F0;--bs:#CBD5E1;--t:#0F172A;--t2:#475569;--t3:#94A3B8;--r:12px;--rs:8px;--rl:16px;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -568,8 +570,9 @@ login: async () => `
 
 // CUSTOMER HOME
 home: async () => {
-  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:26.298,lng:73.018})) : r({lat:26.298,lng:73.018}));
-  const shopsRes = await api('GET', '/api/shops?lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=5');
+  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null})) : r({lat:null,lng:null}));
+  const locParam = myCoords.lat ? '?lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=5' : '';
+  const shopsRes = await api('GET', '/api/shops'+locParam);
   const allProdsRes = await api('GET', '/api/shops/all/products');
   const shops = shopsRes.shops || [];
   const allProds = allProdsRes.products || [];
@@ -597,12 +600,13 @@ home: async () => {
 
 // STORES MAP
 stores: async () => {
-  const coords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:26.298,lng:73.018})) : r({lat:26.298,lng:73.018}));
-  const res = await api('GET', '/api/shops?lat='+coords.lat+'&lng='+coords.lng+'&radius=5');
+  const coords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null})) : r({lat:null,lng:null}));
+  const locP = coords.lat ? '?lat='+coords.lat+'&lng='+coords.lng+'&radius=5' : '';
+  const res = await api('GET', '/api/shops'+locP);
   const shops = res.shops || [];
   return `
     <h2 class="st">🗺️ Stores Near You</h2>
-    <div class="fl ic g1 mb1"><span class="tag tg">📍 Jodhpur, Raj</span><span class="tag tb">5km radius</span><span class="tag tw">${shops.length} stores</span></div>
+    <div class="fl ic g1 mb1"><span class="tag tg">📍 Aapki Location</span><span class="tag tb">5km radius</span><span class="tag tw">${shops.length} stores</span></div>
     <div id="map" style="height:270px;margin-bottom:.85rem"></div>
     <div class="sbar"><span>🔍</span><input placeholder="Search stores..." oninput="filterStoreList(this.value,'${JSON.stringify(shops).replace(/'/g,"\\'")}')"></div>
     <div id="store-list-m">${shops.map(s=>`<div class="card fl ic g2">
@@ -769,11 +773,13 @@ sorders: async () => {
       <span class="tag ${o.status==='confirmed'?'tb':o.status==='preparing'?'tw':o.status==='delivered'?'tg':'tr'}">${o.status.replace(/_/g,' ')}</span></div>
       <div class="tsm tm mt1">${o.items?.map(i=>i.product_name+' ×'+i.qty).join(', ')}</div>
       <div class="tsm mt1">📍 <strong>${o.address||'Address nahi diya'}</strong></div>
-      <div class="fl ic jb mt1"><span class="txs tt">${new Date(o.created_at).toLocaleString('en-IN')}</span>
-      <div class="fl g1 ic"><span class="fw7 tsm" style="color:var(--a)">₹${o.total}</span>
-      ${o.status==='confirmed'?`<button class="btn ba bsm" onclick="updateOrderStatus('${o.id}','preparing')">Accept</button><button class="btn bsm" style="background:var(--dl);color:var(--d);border:none" onclick="updateOrderStatus('${o.id}','cancelled')">Reject</button>`:''}
-      ${o.status==='preparing'?`<button class="btn bp bsm" onclick="updateOrderStatus('${o.id}','picked_up')">Ready ✓</button>`:''}
-      </div></div>
+      <div class="fl g1 mt1" style="flex-wrap:wrap">
+        ${o.status==='confirmed'?`<button class="btn ba bsm" onclick="updateOrderStatus('${o.id}','preparing')">✅ Accept</button><button class="btn bsm" style="background:var(--dl);color:var(--d);border:none" onclick="updateOrderStatus('${o.id}','cancelled')">❌ Reject</button>`:''}
+        ${o.status==='preparing'?`<button class="btn bp bsm" onclick="updateOrderStatus('${o.id}','picked_up')">📦 Ready</button>`:''}
+        ${o.customer_phone?`<a href="tel:${o.customer_phone}" class="btn bo bsm" style="text-decoration:none">📞 Customer</a>`:''}
+        ${o.delivery_partner_phone?`<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Partner</a>`:''}
+        <span class="txs tt" style="margin-left:auto">${new Date(o.created_at).toLocaleString('en-IN')}</span>
+      </div>
     </div>`).join(''):'<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">No orders yet</div>'}`;
 },
 
@@ -884,7 +890,7 @@ dlhome: async () => {
     if (o.status==='out_for_delivery') return '<button class="btn ba bsm" onclick="updateDlStatus(\''+o.id+'\',\'delivered\')">✅ Delivered</button>';
     return '';
   };
-  const mineHtml = mine.map(o => '<div class="card" style="border:2px solid var(--a)"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tg">'+o.status.replace(/_/g,' ')+'</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">💰 ₹'+o.total+' · '+(o.items&&o.items.length)+' items</div><div class="fl g1 mt1">'+statusBtn(o)+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.address||'Jodhpur')+'" target="_blank" class="btn bp bsm">🗺️ Maps</a></div></div>').join('');
+  const mineHtml = mine.map(o => '<div class="card" style="border:2px solid var(--a)"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tg">'+o.status.replace(/_/g,' ')+'</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">💰 ₹'+o.total+' · '+(o.items&&o.items.length)+' items</div><div class="fl g1 mt1">'+statusBtn(o)+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.address||'')+'" target="_blank" class="btn bp bsm">🗺️ Maps</a></div></div>').join('');
   // Group by address for bulk delivery
   const grouped = {};
   available.forEach(o => {
@@ -1277,60 +1283,90 @@ function renderTracking(status) {
 // ════════════════════════════════════════════
 function initMap() {
   const el = document.getElementById('map');
-  if (!el || el._done) return;
-  el._done = true;
+  if (!el || el._m) return;
   const buildMap = (lat, lng) => {
-    // Google Maps Embed — no API key needed for basic embed
-    const key = window.GOOGLE_MAPS_KEY || '';
-    if (key) {
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" allowfullscreen src="https://www.google.com/maps/embed/v1/search?key='+key+'&q=shops+near+me&center='+lat+','+lng+'&zoom=14"></iframe>';
-    } else {
-      // Fallback: OpenStreetMap iframe (no key needed)
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(lng-0.02)+','+(lat-0.02)+','+(lng+0.02)+','+(lat+0.02)+'&layer=mapnik&marker='+lat+','+lng+'" allowfullscreen></iframe>';
-    }
-    // Show nearby shops below map from API
-    api('GET', '/api/shops').then(r => {
-      const shops = r.shops || [];
-      const nearby = document.getElementById('stores-list');
-      if (nearby && shops.length === 0) nearby.innerHTML = '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Aapke area mein abhi koi shop nahi hai</div>';
-    });
+    try {
+      const m = L.map('map').setView([lat, lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(m);
+      // Customer location marker
+      L.marker([lat, lng], { icon: L.divIcon({ html: '<div style="background:#2563EB;color:#fff;padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.2)">📍 Aap</div>', className: '', iconAnchor: [20, 10] }) }).addTo(m);
+      L.circle([lat, lng], { radius: 2000, color: '#2563EB', fillColor: '#2563EB', fillOpacity: 0.05, weight: 1.5 }).addTo(m);
+      el._m = m;
+      // Real shops from API
+      api('GET', '/api/shops').then(r => {
+        (r.shops || []).forEach(s => {
+          if (s.lat && s.lng) {
+            L.marker([s.lat, s.lng], { icon: L.divIcon({ html: '<div style="background:#fff;border:2px solid #2563EB;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap">'+s.emoji+' '+s.name.split(' ')[0]+'</div>', className: '', iconAnchor: [20, 10] }) }).addTo(m).bindPopup('<b>'+s.name+'</b><br>'+s.category+'<br>⭐'+s.rating);
+          }
+        });
+      });
+    } catch(e) { el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Map load nahi hua</div>'; }
   };
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => buildMap(pos.coords.latitude, pos.coords.longitude), () => buildMap(26.298, 73.018));
-  } else { buildMap(26.298, 73.018); }
+    navigator.geolocation.getCurrentPosition(
+      pos => buildMap(pos.coords.latitude, pos.coords.longitude),
+      () => { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--t2)">📍 Location access do taaki nearby shops dikh sakein</div>'; }
+    );
+  } else { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--t2)">📍 Location access do taaki nearby shops dikh sakein</div>'; }
 }
 
 function initRouteMap() {
   const el = document.getElementById('rmap');
-  if (!el || el._done) return;
-  el._done = true;
+  if (!el || el._m) return;
+  const build = (lat, lng) => {
+    try {
+      const m = L.map('rmap').setView([lat, lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(m);
+      L.marker([lat, lng], { icon: L.divIcon({ html: '<div style="background:#16A34A;color:#fff;padding:3px 7px;border-radius:50%;font-size:12px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.3)">📍</div>', className: '', iconAnchor: [12, 12] }) }).addTo(m);
+      el._m = m;
+    } catch(e) {}
+  };
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(pos.coords.longitude-0.02)+','+(pos.coords.latitude-0.02)+','+(pos.coords.longitude+0.02)+','+(pos.coords.latitude+0.02)+'&layer=mapnik&marker='+pos.coords.latitude+','+pos.coords.longitude+'" allowfullscreen></iframe>';
-    }, () => {
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik&marker=26.298,73.018" allowfullscreen></iframe>';
-    });
-  } else {
-    el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik&marker=26.298,73.018" allowfullscreen></iframe>';
-  }
+    navigator.geolocation.getCurrentPosition(
+      pos => build(pos.coords.latitude, pos.coords.longitude),
+      () => { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--t2)">📍 GPS enable karo route dekhne ke liye</div>'; }
+    );
+  } else { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--t2)">📍 GPS enable karo</div>'; }
 }
 
 function initOrderMap(orderId) {
   const mapId = orderId ? ('omap-' + orderId) : 'omap';
   const el = document.getElementById(mapId);
-  if (!el || el._done) return;
-  el._done = true;
+  if (!el || el._m) return;
+  const build = (lat, lng) => {
+    try {
+      const m = L.map(mapId, { zoomControl: false }).setView([lat, lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(m);
+      // Customer home marker
+      L.marker([lat, lng], { icon: L.divIcon({ html: '<div style="background:#16A34A;color:#fff;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">🏠 Aap</div>', className: '', iconAnchor: [20, 10] }) }).addTo(m);
+      // Delivery partner marker
+      const partnerIcon = L.divIcon({ html: '<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))">🏍️</div>', iconSize: [28, 28], className: '', iconAnchor: [14, 14] });
+      const partnerMarker = L.marker([lat, lng], { icon: partnerIcon }).addTo(m).bindPopup('🏍️ Delivery Partner');
+      el._m = m;
+      el._partnerMarker = partnerMarker;
+      // Live WS location update
+      _partnerMarkerCallback = (plat, plng, incomingOrderId) => {
+        if (incomingOrderId && orderId && incomingOrderId !== orderId) return;
+        partnerMarker.setLatLng([plat, plng]);
+        m.panTo([plat, plng], { animate: true, duration: 0.5 });
+      };
+      // Fallback poll every 8s
+      if (orderId) {
+        el._pollInterval = setInterval(async () => {
+          try {
+            const t = await api('GET', '/api/orders/' + orderId + '/track');
+            if (t.success && t.delivery_partner?.lat) partnerMarker.setLatLng([t.delivery_partner.lat, t.delivery_partner.lng]);
+          } catch {}
+        }, 8000);
+      }
+    } catch(e) {}
+  };
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox='+(lng-0.02)+','+(lat-0.02)+','+(lng+0.02)+','+(lat+0.02)+'&layer=mapnik&marker='+lat+','+lng+'" allowfullscreen></iframe>';
-    }, () => {
-      el.innerHTML = '<iframe width="100%" height="100%" style="border:0" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=72.998,26.278,73.038,26.318&layer=mapnik" allowfullscreen></iframe>';
-    });
-  } else {
-    el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--t3)">Location access de kar live tracking dekho</div>';
-  }
-  _partnerMarkerCallback = () => {};
+    navigator.geolocation.getCurrentPosition(
+      pos => build(pos.coords.latitude, pos.coords.longitude),
+      () => build(26.298, 73.018)
+    );
+  } else { build(26.298, 73.018); }
 }
 
 // ════════════════════════════════════════════
@@ -1621,14 +1657,13 @@ async function goOnline() {
         startLocationBroadcast();
       },
       async () => {
-        // GPS denied — fall back to Jodhpur centre coords
-        const res = await api('PUT', '/api/delivery/status', { status: 'active', lat: 26.298, lng: 73.018 });
-        showToast((res.success ? res.message : '❌ ' + res.message) + ' (GPS unavailable)');
+        const res = await api('PUT', '/api/delivery/status', { status: 'active', lat: null, lng: null });
+        showToast((res.success ? res.message : '❌ ' + res.message) + ' (GPS unavailable — location ke bina limited tracking)');
         startLocationBroadcast();
       }
     );
   } else {
-    const res = await api('PUT', '/api/delivery/status', { status: 'active', lat: 26.298, lng: 73.018 });
+    const res = await api('PUT', '/api/delivery/status', { status: 'active', lat: null, lng: null });
     showToast(res.success ? res.message : '❌ ' + res.message);
   }
 }
