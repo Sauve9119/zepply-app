@@ -15,16 +15,82 @@
   "pending_otps": [],
   "reset_otps": [],
   "challenges": [
-    { "id": "ch1", "title": "5 din lagatar order karo", "reward_points": 500, "target": 5, "type": "streak" },
-    { "id": "ch2", "title": "Is hafte ₹2000 kharch karo", "reward_points": 300, "target": 2000, "type": "spend" },
-    { "id": "ch3", "title": "3 naye stores se order karo", "reward_points": 400, "target": 3, "type": "new_stores" },
-    { "id": "ch4", "title": "5 deliveries rate karo", "reward_points": 150, "target": 5, "type": "ratings" },
-    { "id": "ch5", "title": "2 doston ko refer karo", "reward_points": 600, "target": 2, "type": "referrals" }
+    {
+      "id": "ch1",
+      "title": "5 din lagatar order karo",
+      "reward_points": 500,
+      "target": 5,
+      "type": "streak"
+    },
+    {
+      "id": "ch2",
+      "title": "Is hafte \u20b92000 kharch karo",
+      "reward_points": 300,
+      "target": 2000,
+      "type": "spend"
+    },
+    {
+      "id": "ch3",
+      "title": "3 naye stores se order karo",
+      "reward_points": 400,
+      "target": 3,
+      "type": "new_stores"
+    },
+    {
+      "id": "ch4",
+      "title": "5 deliveries rate karo",
+      "reward_points": 150,
+      "target": 5,
+      "type": "ratings"
+    },
+    {
+      "id": "ch5",
+      "title": "2 doston ko refer karo",
+      "reward_points": 600,
+      "target": 2,
+      "type": "referrals"
+    }
   ],
   "coupons": [
-    { "id": "c1", "code": "WELCOME", "type": "flat", "value": 75, "min_order": 150, "max_uses": 999, "used": 0, "active": true },
-    { "id": "c2", "code": "FIRST100", "type": "flat", "value": 100, "min_order": 400, "max_uses": 500, "used": 0, "active": true },
-    { "id": "c3", "code": "SAVE50", "type": "flat", "value": 50, "min_order": 200, "max_uses": 1000, "used": 0, "active": true },
-    { "id": "c4", "code": "KART10", "type": "percentage", "value": 10, "min_order": 100, "max_uses": 5000, "used": 0, "active": true }
+    {
+      "id": "c1",
+      "code": "WELCOME",
+      "type": "flat",
+      "value": 75,
+      "min_order": 150,
+      "max_uses": 999,
+      "used": 0,
+      "active": true
+    },
+    {
+      "id": "c2",
+      "code": "FIRST100",
+      "type": "flat",
+      "value": 100,
+      "min_order": 400,
+      "max_uses": 500,
+      "used": 0,
+      "active": true
+    },
+    {
+      "id": "c3",
+      "code": "SAVE10",
+      "type": "percentage",
+      "value": 10,
+      "min_order": 100,
+      "max_uses": 1000,
+      "used": 0,
+      "active": true
+    },
+    {
+      "id": "c4",
+      "code": "KART10",
+      "type": "percentage",
+      "value": 10,
+      "min_order": 100,
+      "max_uses": 5000,
+      "used": 0,
+      "active": true
+    }
   ]
 }
