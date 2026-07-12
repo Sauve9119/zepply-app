@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://zepply.in/sitemap.xml
+
+# Crawl-delay for bots
+Crawl-delay: 1
