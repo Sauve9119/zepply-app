@@ -149,7 +149,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       enrichedItems.push({ product_id: item.product_id, shop_id: product.shop_id, qty: item.qty, price: product.price, total: itemTotal });
     }
 
-    const delivery_charge = subtotal >= 300 ? 0 : 25;
+    const delivery_charge = subtotal >= 500 ? 0 : 30; // ₹30 customer se, ₹25 delivery boy ko, ₹5 platform; free above ₹500
 
     // Coupon validate
     let discount = 0, coupon_used = null;
