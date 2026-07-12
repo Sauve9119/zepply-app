@@ -225,7 +225,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   </div>
   <div class="fg mt1">
     <label>📍 Delivery Address</label>
-    <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho (jaise: 12B, Shastri Nagar, Jodhpur - 342001)" style="resize:none"></textarea>
+    <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho (jaise: 12B, Main Market, aapka shehar - PIN code)" style="resize:none">${user?.address||''}</textarea>
   </div>
   <div class="fg mt1">
     <label>💳 Payment Method</label>
@@ -299,8 +299,8 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 // ════════════════════════════════════════════
 const API = '';  // same origin — backend serves frontend
 let role = 'customer';
-let token = '';
-let user = null;
+let token = localStorage.getItem('zepply_token') || '';
+let user = JSON.parse(localStorage.getItem('zepply_user') || 'null');
 let cart = {};
 let couponApplied = null;
 let myRating = 0;
@@ -327,7 +327,13 @@ async function api(method, path, body, auth = true) {
 // ════════════════════════════════════════════
 async function doLogin(email, pwd) {
   const res = await api('POST', '/api/auth/login', { email, password: pwd }, false);
-  if (res.success) { token = res.token; user = res.user; return true; }
+  if (res.success) {
+    token = res.token; user = res.user;
+    localStorage.setItem('zepply_token', token);
+    localStorage.setItem('zepply_user', JSON.stringify(user));
+    localStorage.setItem('zepply_role', user.role);
+    return true;
+  }
   showToast('❌ ' + res.message); return false;
 }
 
@@ -338,9 +344,30 @@ async function doRegister(name, email, phone, pwd, r) {
 }
 async function doRegisterWithExtra(name, email, phone, pwd, r, extra) {
   const res = await api('POST', '/api/auth/register', { name, email, phone, password: pwd, role: r, ...extra }, false);
-  if (res.success) { token = res.token; user = res.user; showToast('🎉 ' + res.message); return true; }
+  if (res.success) {
+    token = res.token; user = res.user;
+    localStorage.setItem('zepply_token', token);
+    localStorage.setItem('zepply_user', JSON.stringify(user));
+    localStorage.setItem('zepply_role', user.role);
+    showToast('🎉 ' + res.message); return true;
+  }
   showToast('❌ ' + res.message); return false;
 }
+
+// ════════════════════════════════════════════
+// SESSION RESTORE — page refresh pe login rahega
+// ════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  const savedToken = localStorage.getItem('zepply_token');
+  const savedUser = localStorage.getItem('zepply_user');
+  const savedRole = localStorage.getItem('zepply_role');
+  if (savedToken && savedUser && savedRole) {
+    token = savedToken;
+    user = JSON.parse(savedUser);
+    role = savedRole;
+    enterApp(role);
+  }
+});
 
 // ════════════════════════════════════════════
 // NAV / SCREEN
@@ -394,6 +421,7 @@ function switchRole() {
   token = null; user = null;
   localStorage.removeItem('zepply_token');
   localStorage.removeItem('zepply_user');
+  localStorage.removeItem('zepply_role');
   document.getElementById('app').style.display = 'none';
   document.getElementById('splash').style.display = 'flex';
   cart = {}; couponApplied = null; updateCF();
@@ -454,6 +482,7 @@ function handleLogout() {
   token = null; user = null;
   localStorage.removeItem('zepply_token');
   localStorage.removeItem('zepply_user');
+  localStorage.removeItem('zepply_role');
   document.getElementById('app').style.display = 'none';
   document.getElementById('splash').style.display = 'flex';
   cart = {}; couponApplied = null; updateCF();
@@ -784,7 +813,7 @@ sorders: async () => {
 },
 
 sproducts: async () => {
-  // FIX: s1 hardcoded tha — ab user ki real shop fetch karo
+
   const shopsRes = await api('GET', '/api/shops');
   const myShop = (shopsRes.shops || []).find(s => s.owner_id === user?.id);
   if (!myShop) return `<div class="card" style="text-align:center;padding:2rem">
@@ -1186,6 +1215,12 @@ async function placeOrder() {
   });
   if (res.success) {
     currentOrderId = res.order.id;
+    // Address save karo user profile mein future use ke liye
+    if (user && address) {
+      user.address = address;
+      localStorage.setItem('zepply_user', JSON.stringify(user));
+      api('PUT', '/api/auth/profile', { address });
+    }
     cart = {}; couponApplied = null; updateCF();
     closeModal('m-cart');
     showToast('🎉 ' + res.message);
