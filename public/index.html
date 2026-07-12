@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zepply — Hyperlocal Delivery</title>
+<title>Zepply — 10 Min Delivery</title>
+<meta name="description" content="Grocery, Hardware, Stationery — 10-30 min delivery from your local stores">
+<meta name="theme-color" content="#2563EB">
+<link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -180,8 +183,8 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 
 <!-- SPLASH -->
 <div id="splash">
-  <div class="slogo">Near<span>Kart</span> ⚡</div>
-  <div class="stag">Zepply karo — milta hai turant.<br>Shop from multiple stores. Earn as you go.</div>
+  <div class="slogo">Zepply ⚡</div>
+  <div class="stag">Ab grocery se lekar hardware tak —<br>sab milega 10–30 minute mein 🚀</div>
   <div class="rg">
     <div class="rc" onclick="enterApp('customer')"><div class="ri">🛒</div><div class="rn">Customer</div><div class="rd">Shop, earn coins, spin daily & save big</div></div>
     <div class="rc" onclick="enterApp('shopowner')"><div class="ri">🏪</div><div class="rn">Shop Owner</div><div class="rd">List products, manage orders & run promos</div></div>
@@ -193,7 +196,10 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 <!-- APP -->
 <div id="app">
   <div class="topbar">
-    <div class="tl">Near<span style="color:var(--p)">Kart</span></div>
+    <div style="flex:1;cursor:pointer" onclick="showAddressPicker()">
+      <div style="font-size:.65rem;color:var(--t3)">Delivery to</div>
+      <div class="tl" style="font-size:.9rem" id="location-label">📍 Location detect ho rahi hai...</div>
+    </div>
     <div class="tbadge" id="rbadge">Customer</div>
     <div style="display:flex;gap:.35rem;align-items:center">
       <div class="ib" onclick="openNotifs()" title="Notifications">🔔<div class="bdot" id="ndot"></div></div>
@@ -224,8 +230,8 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
     <div id="cpn-msg" style="font-size:.72rem;margin-top:.25rem"></div>
   </div>
   <div class="fg mt1">
-    <label>📍 Delivery Address</label>
-    <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho (jaise: 12B, Main Market, aapka shehar - PIN code)" style="resize:none">${user?.address||''}</textarea>
+    <div class="fl ic jb mb1"><label style="margin:0">📍 Delivery Address</label><span style="font-size:.72rem;color:var(--p);cursor:pointer" onclick="showAddressPicker()">📋 Saved addresses</span></div>
+    <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho..." style="resize:none">${user?.address||''}</textarea>
   </div>
   <div class="fg mt1">
     <label>💳 Payment Method</label>
@@ -279,6 +285,17 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   <h2 class="st">🏆 Weekly Challenges</h2>
   <div id="chal-list"></div>
   <button class="btn bo bblk mt1" onclick="closeModal('m-chal')">Close</button>
+</div></div>
+
+<div class="mo" id="m-addr"><div class="ms"><div class="mh"></div>
+  <h2 class="st">📍 Delivery Address</h2>
+  <div id="saved-addrs"></div>
+  <div class="div"></div>
+  <div class="fg"><label>Naya Address</label>
+  <input id="new-addr-label" placeholder="Label (jaise: Ghar, Office)" class="mb1">
+  <textarea id="new-addr-text" rows="2" placeholder="Pura pata daalo"></textarea></div>
+  <button class="btn bp bblk mt1" onclick="saveNewAddress()">Save & Use →</button>
+  <button class="btn bo bblk mt1" onclick="closeModal('m-addr')">Cancel</button>
 </div></div>
 
 <div class="mo" id="m-item-req"><div class="ms"><div class="mh"></div>
@@ -605,28 +622,65 @@ home: async () => {
   const allProdsRes = await api('GET', '/api/shops/all/products');
   const shops = shopsRes.shops || [];
   const allProds = allProdsRes.products || [];
-  return `
-    <div class="sbanner">
-      <div><div style="font-weight:800;font-size:.95rem">🛒 Zepply — Hyperlocal Delivery</div>
-      <div style="font-size:.72rem;opacity:.85;margin-top:2px">Apne area ke stores se order karo</div></div>
-      <div class="sbadge">Fast 🚀</div>
-    </div>
-    <div class="sbar"><span>🔍</span><input placeholder="Search products, stores..." id="search-inp" oninput="filterProds(this.value)"></div>
-    <div class="cscroll" id="cats">
-      ${['All','Grocery','Hardware','Stationery','Wholesale','Vegetables','Sale','❤️ Wishlist'].map((c,i)=>
-        `<div class="cp ${i===0?'active':''}" onclick="filterCat(this,'${c}')" id="cat-${i}"><span class="ce">${['🏪','🛒','🔧','✏️','📦','🥦','🔥','❤️'][i]}</span><span class="cl">${c.replace('❤️ ','')}</span></div>`
-      ).join('')}
-    </div>
-    <div id="live-feed-home"></div>
-    <div class="card" style="background:var(--pl);border-color:var(--p);display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-      <div style="font-size:1.5rem">🙋</div>
-      <div style="flex:1"><div class="fw7 tsm" style="color:var(--p)">Apna Item Request Karo</div><div class="txs tm">Jo item nahi mil raha — 24 ghante mein shop owner respond karenge</div></div>
-      <button class="btn bp bsm" onclick="openItemRequest()">Request →</button>
-    </div>
-    <div id="stores-list">${shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('')}</div>
-    <script>startHomeFeed();<\/script>`;
-},
 
+  // Update location label
+  if (myCoords.lat) {
+    const lbl = document.getElementById('location-label');
+    if (lbl) lbl.textContent = '📍 Aapki location';
+  }
+
+  // Categories
+  const cats = [
+    {e:'🛒',l:'Grocery',c:'Grocery'},
+    {e:'🥦',l:'Sabzi',c:'Vegetables'},
+    {e:'🔧',l:'Hardware',c:'Hardware'},
+    {e:'✏️',l:'Stationery',c:'Stationery'},
+    {e:'📦',l:'Wholesale',c:'Wholesale'},
+    {e:'💊',l:'Medical',c:'Medical'},
+    {e:'⚡',l:'Electronics',c:'Electronics'},
+    {e:'❤️',l:'Wishlist',c:'Wishlist'},
+  ];
+
+  return `
+  <!-- Search bar -->
+  <div class="sbar" onclick="document.getElementById('srch').focus()">
+    <span style="color:var(--t3)">🔍</span>
+    <input id="srch" placeholder="Grocery, Dal, Soap..." oninput="filterProds(this.value)" autocomplete="off">
+    <span id="srch-clear" style="display:none;cursor:pointer;color:var(--t3)" onclick="document.getElementById('srch').value='';filterProds('');this.style.display='none'">✕</span>
+  </div>
+
+  <!-- Delivery promise -->
+  <div style="background:linear-gradient(135deg,#0F4C35,#1A6B4A);color:#fff;border-radius:var(--r);padding:.7rem 1rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.75rem">
+    <div style="font-size:2rem">⚡</div>
+    <div><div style="font-weight:800;font-size:1rem">10–30 min delivery</div>
+    <div style="font-size:.72rem;opacity:.85">Order karo — ghar pe milega</div></div>
+    <div style="margin-left:auto;background:rgba(255,255,255,.2);padding:.3rem .7rem;border-radius:20px;font-size:.7rem;font-weight:700">${shops.length} shops</div>
+  </div>
+
+  <!-- Categories -->
+  <div class="cscroll">
+    ${cats.map(c=>`<div class="cp" onclick="filterCat(this,'${c.c}')"><span class="ce">${c.e}</span><span class="cl">${c.l}</span></div>`).join('')}
+  </div>
+
+  <!-- Request item banner -->
+  <div class="card" style="background:var(--pl);border-color:var(--p);display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;padding:.7rem .85rem">
+    <div style="font-size:1.4rem">🙋</div>
+    <div style="flex:1"><div class="fw7 tsm" style="color:var(--p)">Item nahi mila?</div><div class="txs tm">Request karo — 24hr mein milega</div></div>
+    <button class="btn bp bsm" onclick="openItemRequest()">Request →</button>
+  </div>
+
+  <!-- Live feed -->
+  <div id="live-feed-home"></div>
+
+  <!-- Shops + Products -->
+  <div id="stores-list">
+    ${shops.length === 0 ?
+      '<div class="card" style="text-align:center;padding:2rem"><div style="font-size:3rem">🏪</div><div class="fw7 mt1">Aapke area mein abhi koi shop nahi</div><div class="tsm tm mt1">Jald hi shops add hongi</div></div>' :
+      shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('')
+    }
+  </div>
+  `;
+},
 // STORES MAP
 stores: async () => {
   const coords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null})) : r({lat:null,lng:null}));
@@ -656,7 +710,13 @@ orders: async () => {
     <h2 class="st">📦 My Orders</h2>
     ${active.length ? active.map(o=>`<div class="card card-lg">
       <div class="fl ic jb mb1"><div class="fw7 tsm">#${o.id.slice(-8).toUpperCase()}</div><span class="tag tb">🏍️ ${o.status.replace(/_/g,' ')}</span></div>
-      <div class="tsm tm mb1">${o.items?.length} item(s) · ₹${o.total} · ${o.delivery_partner_name||'Assigning...'}</div>
+      <div class="fl ic jb mb1">
+        <div class="tsm"><span class="fw7">₹${o.total}</span> · ${o.items?.length} item(s)</div>
+        <div class="tsm" style="color:var(--p)">${o.delivery_partner_name?'🏍️ '+o.delivery_partner_name:'⏳ Partner assign ho raha hai'}</div>
+      </div>
+      <div style="background:var(--pl);border-radius:var(--rs);padding:.5rem .75rem;margin-bottom:.5rem;font-size:.75rem;color:var(--pd);font-weight:600">
+        ⏱️ Expected delivery: ${o.status==='out_for_delivery'?'5-10 min':'20-30 min'}
+      </div>
       <div id="omap-${o.id}" style="height:180px;margin-bottom:.7rem"></div>
       ${renderTracking(o.status)}
       <div class="div"></div>
@@ -1047,23 +1107,32 @@ dlearn: async () => `
 function esc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
 function renderShopCard(store, prods = []) {
-  return `<div class="sc">
+  const openTag = store.is_open
+    ? '<span class="tag tg" style="font-size:.58rem">🟢 Open</span>'
+    : '<span class="tag tr" style="font-size:.58rem">🔴 Closed</span>';
+  return `<div class="sc" style="${!store.is_open?'opacity:.75':''}">
     <div class="sh2">
-      <div class="sav" style="background:var(--pl)">${store.emoji}</div>
-      <div style="flex:1"><div class="sn">${store.name}</div>
-      <div class="sm">⭐${store.rating} (${store.total_reviews}) · 📍${store.distance_km||'~0.5'}km · 🕐${store.delivery_time}</div></div>
-      <div class="fl g1 ic">
-        <span class="tag ${store.is_open?'tg':'tr'}" style="font-size:.58rem">${store.is_open?'Open':'Closed'}</span>
-        <span onclick="this.textContent=this.textContent==='❤️'?'🤍':'❤️'" style="cursor:pointer;font-size:.9rem">🤍</span>
+      <div class="sav" style="background:var(--pl);font-size:1.4rem">${store.emoji}</div>
+      <div style="flex:1">
+        <div class="sn">${store.name}</div>
+        <div class="sm">${store.rating>0?'⭐'+store.rating+' · ':''}${store.delivery_time||'20-30 min'} · ${prods.length} items</div>
+        ${store.min_order?'<div class="txs tt">Min ₹'+store.min_order+' · Delivery ₹'+(store.delivery_charge||0)+'</div>':''}
       </div>
+      <div class="fl g1 ic">${openTag}</div>
     </div>
-    ${prods.map(p=>`<div class="pr">
-      <span style="font-size:1.2rem">${p.emoji}</span>
-      <div class="pi"><div class="pn">${p.name}</div><div class="pu">${p.unit}</div></div>
-      <div style="text-align:right"><div class="pnow">₹${p.price}</div>${p.discount>0?`<div class="pwas">₹${p.mrp}</div>`:''}</div>
-      ${p.discount>0?`<span class="tag tr" style="font-size:.6rem">${p.discount}%</span>`:''}
-      <div id="c-${p.id}">${renderAddBtn(p)}</div>
+    ${prods.slice(0,8).map(p=>`<div class="pr">
+      <div style="width:38px;height:38px;background:var(--s3);border-radius:var(--rs);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${p.emoji}</div>
+      <div class="pi">
+        <div class="pn">${esc(p.name)}</div>
+        <div class="pu">${p.unit}${p.stock>0&&p.stock<5?' · <span style="color:var(--d);font-weight:600;font-size:.65rem">Only ${p.stock} left!</span>':''}${p.stock===0?' · <span style="color:var(--t3)">Out of stock</span>':''}</div>
+      </div>
+      <div style="text-align:right;min-width:55px">
+        <div class="pnow">₹${p.price}</div>
+        ${p.discount>0?`<div class="pwas">₹${p.mrp}</div><div class="tag tr" style="font-size:.58rem;margin-top:2px">${p.discount}% off</div>`:''}
+      </div>
+      <div id="c-${p.id}">${p.stock===0?'<span class="txs tt" style="padding:.3rem">Out of<br>stock</span>':renderAddBtn(p)}</div>
     </div>`).join('')}
+    ${prods.length>8?`<div style="text-align:center;padding:.55rem;font-size:.75rem;color:var(--p);cursor:pointer;border-top:1px solid var(--b);font-weight:600">+${prods.length-8} aur products →</div>`:''}
   </div>`;
 }
 
@@ -1265,6 +1334,8 @@ async function filterCat(el, cat) {
 
 async function filterProds(q) {
   const sl = document.getElementById('stores-list');
+  const clr = document.getElementById('srch-clear');
+  if (clr) clr.style.display = q ? 'block' : 'none';
   if (!sl) return;
   if (!q) { showScreen('home'); return; }
   const res = await api('GET', `/api/shops/all/products?search=${encodeURIComponent(q)}`);
@@ -1837,6 +1908,45 @@ function startLiveFeed() {
 // ════════════════════════════════════════════
 // REFERRAL
 // ════════════════════════════════════════════
+function showAddressPicker() {
+  if (!token) { showToast('Pehle login karo'); return; }
+  const saved = JSON.parse(localStorage.getItem('zepply_addresses') || '[]');
+  const el = document.getElementById('saved-addrs');
+  if (el) {
+    el.innerHTML = saved.length ? saved.map((a,i)=>`<div class="card" style="cursor:pointer;margin-bottom:.4rem" onclick="selectAddress('${esc(a.text)}')">
+      <div class="fl ic jb"><div><div class="fw7 tsm">${a.label}</div><div class="tsm tm">${a.text}</div></div>
+      <button class="btn bo bsm" onclick="event.stopPropagation();deleteAddress(${i})">🗑</button></div></div>`).join('') :
+      '<div class="tsm tt" style="padding:.5rem 0">Koi saved address nahi hai</div>';
+  }
+  openModal('m-addr');
+}
+
+function selectAddress(addr) {
+  const el = document.getElementById('delivery-address');
+  if (el) el.value = addr;
+  const lbl = document.getElementById('location-label');
+  if (lbl) lbl.textContent = '📍 ' + addr.slice(0, 30) + (addr.length > 30 ? '...' : '');
+  closeModal('m-addr');
+  showToast('✅ Address select ho gaya');
+}
+
+function saveNewAddress() {
+  const label = document.getElementById('new-addr-label')?.value?.trim() || 'Mera Ghar';
+  const text = document.getElementById('new-addr-text')?.value?.trim();
+  if (!text) return showToast('Address daalo');
+  const saved = JSON.parse(localStorage.getItem('zepply_addresses') || '[]');
+  saved.unshift({ label, text });
+  localStorage.setItem('zepply_addresses', JSON.stringify(saved.slice(0, 5)));
+  selectAddress(text);
+}
+
+function deleteAddress(idx) {
+  const saved = JSON.parse(localStorage.getItem('zepply_addresses') || '[]');
+  saved.splice(idx, 1);
+  localStorage.setItem('zepply_addresses', JSON.stringify(saved));
+  showAddressPicker();
+}
+
 function openItemRequest() {
   if (!token) { showToast('Pehle login karo'); showScreen('login'); return; }
   openModal('m-item-req');
