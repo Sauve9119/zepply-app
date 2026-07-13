@@ -1,5 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
@@ -40,6 +41,45 @@ function estimateDeliveryWindow(shopIds, custLat, custLng) {
   const low = Math.max(10, Math.round(baseMin / 5) * 5);
   const high = low + 10;
   return `${low}-${high} min`;
+}
+
+// SECURITY FIX: pehle order ka total client-side (frontend JS) mein calculate
+// hota tha aur seedha Razorpay checkout ko de diya jaata tha — koi bhi
+// devtools se amount tamper kar sakta tha. Ab yeh shared function server-side
+// hi price nikalta hai (products/coupon DB se), jise create-payment-intent aur
+// COD order dono use karte hain — client ka number kabhi trust nahi karte.
+function computePricing(userId, items, coupon_code) {
+  let subtotal = 0;
+  const enrichedItems = [];
+
+  for (const item of items) {
+    const product = db.findById('products', item.product_id);
+    if (!product || !product.is_active)
+      return { error: `Product ${item.product_id} not available` };
+    if (product.stock < item.qty)
+      return { error: `${product.name} mein sirf ${product.stock} bacha hai` };
+    const itemTotal = product.price * item.qty;
+    subtotal += itemTotal;
+    enrichedItems.push({ product_id: item.product_id, shop_id: product.shop_id, qty: item.qty, price: product.price, total: itemTotal });
+  }
+
+  const delivery_charge = subtotal >= 500 ? 0 : 30; // ₹30 customer se, ₹25 delivery boy ko, ₹5 platform; free above ₹500
+
+  let discount = 0, coupon_used = null;
+  if (coupon_code) {
+    const coupon = db.findAll('coupons').find(c => c.code === coupon_code && c.active);
+    if (coupon) {
+      if (subtotal < coupon.min_order) return { error: `Minimum order ₹${coupon.min_order} chahiye` };
+      if (coupon.max_uses && (coupon.used || 0) >= coupon.max_uses) return { error: 'Coupon limit khatam ho gaya' };
+      const alreadyUsed = db.findAll('orders').some(o => o.coupon_used === coupon_code && o.user_id === userId && o.status !== 'cancelled');
+      if (alreadyUsed) return { error: 'Aap ye coupon pehle use kar chuke hain' };
+      discount = coupon.type === 'flat' ? coupon.value : Math.floor(subtotal * coupon.value / 100);
+      coupon_used = coupon_code;
+    }
+  }
+
+  const total = subtotal + delivery_charge - discount;
+  return { subtotal, delivery_charge, discount, coupon_used, total, enrichedItems };
 }
 
 
@@ -167,48 +207,119 @@ router.post('/:id/accept', auth, requireRole('delivery'), (req, res) => {
   res.json({ success: true, order: updated, message: 'Order accept kar liya! Customer ko notify kar diya.' });
 });
 
+// POST /api/orders/create-payment-intent — online payment se pehle server-side
+// pricing lock karo aur Razorpay ka order banao. Amount kabhi frontend se nahi
+// aata — hamesha yahin DB se recompute hota hai.
+router.post('/create-payment-intent', auth, requireRole('customer'), async (req, res) => {
+  try {
+    const { items, coupon_code } = req.body;
+    if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
+
+    const pricing = computePricing(req.user.id, items, coupon_code);
+    if (pricing.error) return res.status(400).json({ success: false, message: pricing.error });
+
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keyId || !keySecret) {
+      return res.status(503).json({ success: false, message: 'Online payment abhi configure nahi hai. COD use karo.' });
+    }
+
+    const intentId = 'pi' + uuidv4().slice(0, 8);
+    const auth64 = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth64}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: Math.round(pricing.total * 100), currency: 'INR', receipt: intentId })
+    });
+    if (!rzpRes.ok) {
+      const errText = await rzpRes.text();
+      console.error('Razorpay order create error:', rzpRes.status, errText);
+      return res.status(502).json({ success: false, message: 'Payment gateway se order create nahi hua' });
+    }
+    const rzpOrder = await rzpRes.json();
+
+    db.insert('payment_intents', {
+      id: intentId,
+      razorpay_order_id: rzpOrder.id,
+      user_id: req.user.id,
+      items,
+      coupon_code: pricing.coupon_used,
+      subtotal: pricing.subtotal,
+      delivery_charge: pricing.delivery_charge,
+      discount: pricing.discount,
+      total: pricing.total,
+      used: false,
+      created_at: new Date().toISOString()
+    });
+
+    res.json({ success: true, key: keyId, razorpay_order_id: rzpOrder.id, amount: rzpOrder.amount, currency: rzpOrder.currency, total: pricing.total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // POST /api/orders — place new order
 router.post('/', auth, requireRole('customer'), (req, res) => {
   try {
-    const { items, address, coupon_code, payment_method = 'cod', lat, lng } = req.body;
-    if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
+    const { items, address, coupon_code, payment_method = 'cod', lat, lng, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     if (!address) return res.status(400).json({ success: false, message: 'Delivery address required' });
 
-    let subtotal = 0;
-    const enrichedItems = [];
+    let pricing, coupon_used_final = null;
 
-    for (const item of items) {
-      const product = db.findById('products', item.product_id);
-      if (!product || !product.is_active)
-        return res.status(400).json({ success: false, message: `Product ${item.product_id} not available` });
-      if (product.stock < item.qty)
-        return res.status(400).json({ success: false, message: `${product.name} mein sirf ${product.stock} bacha hai` });
-      const itemTotal = product.price * item.qty;
-      subtotal += itemTotal;
-      enrichedItems.push({ product_id: item.product_id, shop_id: product.shop_id, qty: item.qty, price: product.price, total: itemTotal });
-    }
+    if (payment_method === 'online') {
+      // SECURITY FIX: pehle yahan koi verification nahi hoti thi — client jo bhi
+      // razorpay_payment_id bhej de, order bana ke stock deduct ho jaata tha,
+      // payment_status hamesha 'awaiting_payment' pe atka rehta tha (kabhi 'paid'
+      // nahi hota tha). Ab HMAC signature verify karte hain aur amount/items
+      // create-payment-intent step pe locked hue intent record se aate hain —
+      // client dobara items/price nahi bhej sakta.
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature)
+        return res.status(400).json({ success: false, message: 'Payment details missing' });
 
-    const delivery_charge = subtotal >= 500 ? 0 : 30; // ₹30 customer se, ₹25 delivery boy ko, ₹5 platform; free above ₹500
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (!keySecret) return res.status(503).json({ success: false, message: 'Online payment configure nahi hai' });
 
-    // Coupon validate
-    let discount = 0, coupon_used = null;
-    if (coupon_code) {
-      const coupon = db.findAll('coupons').find(c => c.code === coupon_code && c.active);
-      if (coupon) {
-        if (subtotal < coupon.min_order)
-          return res.status(400).json({ success: false, message: `Minimum order ₹${coupon.min_order} chahiye` });
-        if (coupon.max_uses && (coupon.used || 0) >= coupon.max_uses)
-          return res.status(400).json({ success: false, message: 'Coupon limit khatam ho gaya' });
-        const alreadyUsed = db.findAll('orders').some(o => o.coupon_used === coupon_code && o.user_id === req.user.id && o.status !== 'cancelled');
-        if (alreadyUsed)
-          return res.status(400).json({ success: false, message: 'Aap ye coupon pehle use kar chuke hain' });
-        discount = coupon.type === 'flat' ? coupon.value : Math.floor(subtotal * coupon.value / 100);
-        coupon_used = coupon_code;
-        db.updateById('coupons', coupon.id, { used: (coupon.used || 0) + 1 });
+      const expectedSig = crypto.createHmac('sha256', keySecret)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+      if (expectedSig !== razorpay_signature)
+        return res.status(400).json({ success: false, message: 'Payment verification fail hui' });
+
+      const intent = db.findOne('payment_intents', { razorpay_order_id });
+      if (!intent || intent.user_id !== req.user.id)
+        return res.status(400).json({ success: false, message: 'Payment intent not found' });
+      if (intent.used)
+        return res.status(409).json({ success: false, message: 'Ye payment pehle hi use ho chuki hai' });
+
+      // Stock dobara verify karo — intent banne ke baad se stock khatam ho sakta hai
+      for (const item of intent.items) {
+        const product = db.findById('products', item.product_id);
+        if (!product || !product.is_active || product.stock < item.qty) {
+          // Paisa capture ho chuka hai par stock nahi hai — manual refund flag karo
+          db.updateById('payment_intents', intent.id, { used: true, stock_conflict: true });
+          console.error(`⚠️ STOCK CONFLICT after payment capture — razorpay_payment_id=${razorpay_payment_id}, refund manually check karo`);
+          return res.status(409).json({ success: false, message: `Stock khatam ho gaya — payment ${razorpay_payment_id} ka refund process ho raha hai, 3-5 din mein wapas milega` });
+        }
       }
+
+      pricing = { subtotal: intent.subtotal, delivery_charge: intent.delivery_charge, discount: intent.discount, total: intent.total, enrichedItems: intent.items };
+      coupon_used_final = intent.coupon_code;
+      db.updateById('payment_intents', intent.id, { used: true });
+    } else {
+      if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
+      pricing = computePricing(req.user.id, items, coupon_code);
+      if (pricing.error) return res.status(400).json({ success: false, message: pricing.error });
+      coupon_used_final = pricing.coupon_used;
     }
 
-    const total = subtotal + delivery_charge - discount;
+    const { subtotal, delivery_charge, discount, total, enrichedItems } = pricing;
+
+    if (coupon_used_final) {
+      const coupon = db.findAll('coupons').find(c => c.code === coupon_used_final && c.active);
+      if (coupon) db.updateById('coupons', coupon.id, { used: (coupon.used || 0) + 1 });
+    }
+
     const loyalty_earned = Math.floor(total / 10);
     const orderId = 'ord' + uuidv4().slice(0, 8);
     const orderShopIds = [...new Set(enrichedItems.map(i => i.shop_id))];
@@ -217,9 +328,11 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     // FIX: Order unassigned rakho — delivery partner khud accept karega
     const order = {
       id: orderId, user_id: req.user.id, items: enrichedItems, address,
-      status: 'confirmed', subtotal, delivery_charge, discount, coupon_used,
+      status: 'confirmed', subtotal, delivery_charge, discount, coupon_used: coupon_used_final,
       total, loyalty_earned, payment_method,
-      payment_status: payment_method === 'cod' ? 'pending' : 'awaiting_payment',
+      payment_status: payment_method === 'cod' ? 'pending' : 'paid',
+      razorpay_order_id: razorpay_order_id || null,
+      razorpay_payment_id: razorpay_payment_id || null,
       delivery_partner_id: null, // Koi assign nahi — delivery wale khud accept karenge
       estimated_delivery,
       created_at: new Date().toISOString()
