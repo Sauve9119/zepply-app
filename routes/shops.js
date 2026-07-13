@@ -76,7 +76,13 @@ router.put('/:id', auth, requireRole('shopowner'), (req, res) => {
   const shop = db.findById('shops', req.params.id);
   if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
   if (shop.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Not your shop' });
-  const updated = db.updateById('shops', req.params.id, req.body);
+  // FIX: pehle req.body seedha updateById mein pass hota tha — koi bhi field
+  // (owner_id, rating, id, total_reviews) mass-assign kar sakta tha. Ab sirf
+  // shop owner ko jo fields edit karne chahiye wahi whitelist hain.
+  const ALLOWED = ['name', 'category', 'description', 'emoji', 'address', 'lat', 'lng', 'min_order', 'delivery_charge', 'gst', 'delivery_time', 'is_open'];
+  const updates = {};
+  for (const key of ALLOWED) if (key in req.body) updates[key] = req.body[key];
+  const updated = db.updateById('shops', req.params.id, updates);
   res.json({ success: true, shop: updated });
 });
 
@@ -124,8 +130,15 @@ router.post('/:shopId/products', auth, requireRole('shopowner'), (req, res) => {
 router.put('/:shopId/products/:productId', auth, requireRole('shopowner'), (req, res) => {
   const shop = db.findById('shops', req.params.shopId);
   if (!shop || shop.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Not authorized' });
-  const updated = db.updateById('products', req.params.productId, req.body);
-  if (!updated) return res.status(404).json({ success: false, message: 'Product not found' });
+  const product = db.findById('products', req.params.productId);
+  // FIX: pehle sirf shop ownership check hoti thi, product actually us shop ka
+  // hai ya nahi ye kabhi verify nahi hota tha — koi bhi shop owner kisi doosri
+  // shop ka product edit/hide kar sakta tha agar productId pata ho (IDOR bug).
+  if (!product || product.shop_id !== req.params.shopId) return res.status(404).json({ success: false, message: 'Product not found in this shop' });
+  const ALLOWED = ['name', 'category', 'unit', 'price', 'mrp', 'emoji', 'discount', 'stock', 'is_active'];
+  const updates = {};
+  for (const key of ALLOWED) if (key in req.body) updates[key] = req.body[key];
+  const updated = db.updateById('products', req.params.productId, updates);
   res.json({ success: true, product: updated });
 });
 
@@ -133,6 +146,8 @@ router.put('/:shopId/products/:productId', auth, requireRole('shopowner'), (req,
 router.delete('/:shopId/products/:productId', auth, requireRole('shopowner'), (req, res) => {
   const shop = db.findById('shops', req.params.shopId);
   if (!shop || shop.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Not authorized' });
+  const product = db.findById('products', req.params.productId);
+  if (!product || product.shop_id !== req.params.shopId) return res.status(404).json({ success: false, message: 'Product not found in this shop' });
   db.updateById('products', req.params.productId, { is_active: false });
   res.json({ success: true, message: 'Product hidden from listing' });
 });
