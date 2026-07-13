@@ -1550,25 +1550,30 @@ async function placeOrder() {
   const payMethod = document.getElementById('payment-method')?.value || 'cod';
 
   if (payMethod === 'online') {
-    // Razorpay flow
-    const sub = getTotal(), del = sub >= 500 ? 0 : 30;
-    let disc = 0;
-    if (couponApplied && sub >= couponApplied.min) disc = couponApplied.type==='flat' ? couponApplied.value : Math.floor(sub*couponApplied.value/100);
-    const finalAmt = (sub + del - disc) * 100; // paise mein
-    const keyRes = await api('GET', '/api/misc/razorpay-key');
-    if (!keyRes.success || !keyRes.key) { showToast('❌ Payment setup incomplete — COD use karo'); return; }
+    // SECURITY FIX: pehle amount yahin client-side calculate hoke seedha
+    // Razorpay checkout ko de diya jaata tha — devtools se tamper ho sakta tha,
+    // aur order backend pe kabhi verify nahi hota tha (payment_status hamesha
+    // 'awaiting_payment' pe atka rehta). Ab server se signed payment intent
+    // lete hain — amount server-locked hai, aur success ke baad signature
+    // verify karke hi order 'paid' banta hai.
+    const intentRes = await api('POST', '/api/orders/create-payment-intent', { items, coupon_code: couponApplied?.code });
+    if (!intentRes.success) { showToast('❌ ' + (intentRes.message || 'Payment setup incomplete — COD use karo')); return; }
+
     const options = {
-      key: keyRes.key,
-      amount: finalAmt,
-      currency: 'INR',
+      key: intentRes.key,
+      order_id: intentRes.razorpay_order_id,
+      amount: intentRes.amount,
+      currency: intentRes.currency,
       name: 'Qdoor',
       description: 'Order Payment',
       handler: async function(response) {
-        // Payment successful — order place karo
+        // Payment ho gaya — ab backend signature verify karke order finalize karega
         const res = await api('POST', '/api/orders', {
-          items, address, coupon_code: couponApplied?.code,
+          address,
           payment_method: 'online',
-          razorpay_payment_id: response.razorpay_payment_id
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature
         });
         if (res.success) {
           currentOrderId = res.order.id;
@@ -1579,7 +1584,7 @@ async function placeOrder() {
         } else { showToast('❌ ' + res.message); }
       },
       prefill: { name: user?.name || '', email: user?.email || '', contact: user?.phone || '' },
-      theme: { color: '#2563EB' }
+      theme: { color: '#F97316' }
     };
     try {
       const rzp = new Razorpay(options);
