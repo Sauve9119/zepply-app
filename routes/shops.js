@@ -38,7 +38,7 @@ router.get('/', (req, res) => {
     }
     return { ...s, product_count: prods.length, distance_km: distKm ? distKm.toFixed(2) : null };
   });
-  if (lat && lng) shops = shops.filter(s => !s.distance_km || parseFloat(s.distance_km) <= parseFloat(radius));
+  if (lat && lng) shops = shops.filter(s => !s.distance_km || !s.lat || !s.lng || s.lat === 0 || s.lng === 0 || parseFloat(s.distance_km) <= parseFloat(radius));
   res.json({ success: true, shops, total: shops.length });
 });
 
