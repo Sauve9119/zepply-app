@@ -4,6 +4,45 @@ const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
 
+// Haversine distance in km between two coordinates
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// FIX: estimated_delivery pehle hamesha '25-35 min' hardcoded tha, distance ya
+// shop count se koi lena dena nahi tha. Ab agar customer coordinates diye gaye
+// hain toh real distance se estimate karte hain (farthest pickup shop se);
+// warna involved shops ki count ke hisaab se ek sensible fallback deते hain.
+function estimateDeliveryWindow(shopIds, custLat, custLng) {
+  const AVG_SPEED_KMPH = 20; // city traffic average
+  const PREP_MIN = 10; // pehli shop ke liye prep + pickup buffer
+  const EXTRA_SHOP_MIN = 6; // har additional shop pickup ke liye extra time
+
+  const shops = shopIds.map(id => db.findById('shops', id)).filter(Boolean);
+  const hasCoords = custLat != null && custLng != null && shops.some(s => s.lat && s.lng);
+
+  let baseMin;
+  if (hasCoords) {
+    const distances = shops
+      .filter(s => s.lat && s.lng)
+      .map(s => distanceKm(s.lat, s.lng, parseFloat(custLat), parseFloat(custLng)));
+    const maxDist = distances.length ? Math.max(...distances) : 2; // 2km sensible default
+    baseMin = PREP_MIN + (maxDist / AVG_SPEED_KMPH) * 60;
+  } else {
+    baseMin = PREP_MIN + 10; // no coords — assume a short-ish local hop
+  }
+  baseMin += Math.max(0, shopIds.length - 1) * EXTRA_SHOP_MIN;
+
+  const low = Math.max(10, Math.round(baseMin / 5) * 5);
+  const high = low + 10;
+  return `${low}-${high} min`;
+}
+
+
 // GET /api/orders
 router.get('/', auth, (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
@@ -131,7 +170,7 @@ router.post('/:id/accept', auth, requireRole('delivery'), (req, res) => {
 // POST /api/orders — place new order
 router.post('/', auth, requireRole('customer'), (req, res) => {
   try {
-    const { items, address, coupon_code, payment_method = 'cod' } = req.body;
+    const { items, address, coupon_code, payment_method = 'cod', lat, lng } = req.body;
     if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
     if (!address) return res.status(400).json({ success: false, message: 'Delivery address required' });
 
@@ -172,6 +211,8 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     const total = subtotal + delivery_charge - discount;
     const loyalty_earned = Math.floor(total / 10);
     const orderId = 'ord' + uuidv4().slice(0, 8);
+    const orderShopIds = [...new Set(enrichedItems.map(i => i.shop_id))];
+    const estimated_delivery = estimateDeliveryWindow(orderShopIds, lat, lng);
 
     // FIX: Order unassigned rakho — delivery partner khud accept karega
     const order = {
@@ -180,7 +221,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       total, loyalty_earned, payment_method,
       payment_status: payment_method === 'cod' ? 'pending' : 'awaiting_payment',
       delivery_partner_id: null, // Koi assign nahi — delivery wale khud accept karenge
-      estimated_delivery: '25-35 min',
+      estimated_delivery,
       created_at: new Date().toISOString()
     };
 
@@ -279,8 +320,8 @@ router.put('/:id/status', auth, (req, res) => {
       const dp = db.findOne('delivery_partners', { user_id: order.delivery_partner_id });
       if (dp) {
         db.increment('delivery_partners', dp.id, 'total_deliveries', 1);
-        db.increment('delivery_partners', dp.id, 'total_earnings', 55);
-        db.increment('users', order.delivery_partner_id, 'loyalty_points', 55);
+        db.increment('delivery_partners', dp.id, 'total_earnings', 25);
+        db.increment('users', order.delivery_partner_id, 'loyalty_points', 25);
       }
     }
 
