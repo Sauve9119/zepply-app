@@ -1,12 +1,12 @@
-// Zepply Service Worker — Push Notifications
+// Qdoor Service Worker — Push Notifications
 self.addEventListener('push', event => {
   const data = event.data ? event.data.json() : {};
-  const title = data.title || 'Zepply';
+  const title = data.title || 'Qdoor';
   const options = {
     body: data.body || 'Naya update hai!',
     icon: data.icon || '/icon-192.png',
     badge: '/icon-192.png',
-    tag: data.tag || 'zepply-notif',
+    tag: data.tag || 'qdoor-notif',
     renotify: true,
     vibrate: [200, 100, 200],
     data: { url: data.url || '/' }
