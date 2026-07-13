@@ -31,7 +31,9 @@ router.get('/', (req, res) => {
   shops = shops.map(s => {
     const prods = db.findAll('products').filter(p => p.shop_id === s.id && p.is_active === true);
     let distKm = null;
-    if (lat && lng) {
+    // FIX: agar shop ka lat/lng missing (null/undefined/0) hai toh formula NaN de sakta hai
+    // — ab sirf tabhi calculate karte hain jab dono valid numbers hon.
+    if (lat && lng && typeof s.lat === 'number' && typeof s.lng === 'number' && s.lat !== 0 && s.lng !== 0) {
       const R = 6371, dLat = (s.lat - parseFloat(lat)) * Math.PI / 180, dLng = (s.lng - parseFloat(lng)) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 + Math.cos(parseFloat(lat)*Math.PI/180) * Math.cos(s.lat*Math.PI/180) * Math.sin(dLng/2)**2;
       distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
