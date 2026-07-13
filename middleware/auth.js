@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const db = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'zepply_secret_2024_jodhpur';
+const JWT_SECRET = process.env.JWT_SECRET || 'qdoor_dev_only_change_me_in_production';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️  WARNING: JWT_SECRET env var set nahi hai — Railway Variables mein daalo, warna hardcoded fallback use ho raha hai (security risk).');
+}
 
 function auth(req, res, next) {
   const authHeader = req.headers['authorization'];
