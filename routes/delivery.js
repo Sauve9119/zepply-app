@@ -73,7 +73,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   // Collect drops
   const drops = orders.map(o => {
     const user = db.findById('users', o.user_id);
-    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: 30 };
+    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: 25 };
   });
 
   // Simple TSP: sort pickups by proximity to current location, then drops
@@ -81,7 +81,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const allStops = [...pickups, ...drops];
   const totalDist = (allStops.length * 0.6).toFixed(1);
   const totalTime = Math.ceil(allStops.length * 5) + ' min';
-  const totalEarning = drops.length * 30;
+  const totalEarning = drops.length * 25;
 
   res.json({
     success: true,
@@ -112,7 +112,7 @@ router.get('/earnings', auth, requireRole('delivery'), (req, res) => {
   weekStart.setDate(weekStart.getDate() - 7);
 
   const earnings = {
-    today: { deliveries: todayOrders.length, base: todayOrders.length * 30, bonus: 0, tips: 0, total: todayOrders.length * 30 },
+    today: { deliveries: todayOrders.length, base: todayOrders.length * 25, bonus: 0, tips: 0, total: todayOrders.length * 25 },
     month: { deliveries: dp.total_deliveries, total: dp.total_earnings, avg_per_delivery: dp.total_deliveries > 0 ? Math.round(dp.total_earnings / dp.total_deliveries) : 0 },
     daily_target: { target: 20, current: todayOrders.length, bonus_on_completion: 200 },
     rating: dp.rating || 0,
@@ -132,6 +132,16 @@ router.get('/earnings', auth, requireRole('delivery'), (req, res) => {
 // GET /api/delivery/stats/dashboard
 router.get('/stats/dashboard', auth, requireRole('delivery'), (req, res) => {
   const dp = db.findOne('delivery_partners', { user_id: req.user.id });
+
+  // FIX: rank/top_percentile pehle mock the (hardcoded 3, 12). Ab saare active
+  // delivery partners ko total_earnings ke hisaab se sort karke real rank nikalte hain.
+  const allPartners = db.findAll('delivery_partners')
+    .slice()
+    .sort((a, b) => (b.total_earnings || 0) - (a.total_earnings || 0));
+  const myIndex = dp ? allPartners.findIndex(p => p.id === dp.id) : -1;
+  const rank = myIndex === -1 ? null : myIndex + 1;
+  const topPercentile = (rank && allPartners.length) ? Math.max(1, Math.round((rank / allPartners.length) * 100)) : null;
+
   res.json({
     success: true,
     stats: {
@@ -140,8 +150,8 @@ router.get('/stats/dashboard', auth, requireRole('delivery'), (req, res) => {
       rating: dp?.rating || 0,
       coins: dp?.coins || 0,
       badge: dp?.badge || 'bronze',
-      rank: 3, // mock
-      top_percentile: 12
+      rank,
+      top_percentile: topPercentile
     }
   });
 });
