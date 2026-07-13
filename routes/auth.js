@@ -67,13 +67,19 @@ router.post('/send-otp', async (req, res) => {
   if (db.findOne('users', { email }))
     return res.status(409).json({ success: false, message: 'Ye email pehle se registered hai. Login karo.' });
 
+  // FIX: pehle koi cooldown nahi tha — same email pe baar-baar hit karke Brevo
+  // email cost/quota abuse ho sakta tha. Ab 60 second ka gap zaroori hai.
+  const existing = db.findOne('pending_otps', { email });
+  if (existing && existing.created_at && Date.now() - new Date(existing.created_at).getTime() < 60 * 1000) {
+    return res.status(429).json({ success: false, message: 'Thoda ruko — 60 second baad dobara try karo' });
+  }
+
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
 
   // OTP store karo (pending_otps)
-  const existing = db.findOne('pending_otps', { email });
   if (existing) db.deleteById('pending_otps', existing.id);
-  db.insert('pending_otps', { id: 'otp' + uid(), email, otp, expiry, verified: false });
+  db.insert('pending_otps', { id: 'otp' + uid(), email, otp, expiry, verified: false, created_at: new Date().toISOString() });
 
   // Response turant bhejo — email background mein bhejo (taaki button slow na lage)
   res.json({ success: true, message: `OTP bheja gaya ${email} pe. 10 minute mein expire hoga.` });
@@ -177,12 +183,16 @@ router.post('/forgot-password', async (req, res) => {
   const u = db.findOne('users', { email });
   if (!u) return res.status(404).json({ success: false, message: 'Ye email registered nahi hai' });
 
+  const existing = db.findOne('reset_otps', { email });
+  if (existing && existing.created_at && Date.now() - new Date(existing.created_at).getTime() < 60 * 1000) {
+    return res.status(429).json({ success: false, message: 'Thoda ruko — 60 second baad dobara try karo' });
+  }
+
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-  const existing = db.findOne('reset_otps', { email });
   if (existing) db.deleteById('reset_otps', existing.id);
-  db.insert('reset_otps', { id: 'rot' + uid(), email, otp, expiry });
+  db.insert('reset_otps', { id: 'rot' + uid(), email, otp, expiry, created_at: new Date().toISOString() });
 
   res.json({ success: true, message: `OTP bheja gaya ${email} pe` });
   sendOTP(email, otp, 'Qdoor — Password Reset OTP', 'Aapka password reset OTP:');
