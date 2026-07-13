@@ -33,7 +33,7 @@ router.post('/redeem', auth, (req, res) => {
   const user = db.findById('users', req.user.id);
 
   if ((user.loyalty_points || 0) < points_cost) {
-    return res.status(400).json({ success: false, message: 'Not enough NearKoins' });
+    return res.status(400).json({ success: false, message: 'Not enough ZepCoins' });
   }
 
   const rewards = {
@@ -165,18 +165,60 @@ router.post('/review-reward', auth, (req, res) => {
     description: `${review_type} review reward`,
     created_at: new Date().toISOString()
   });
-  res.json({ success: true, points_earned: pts, message: `+${pts} NearKoins for your review!` });
+  res.json({ success: true, points_earned: pts, message: `+${pts} ZepCoins for your review!` });
 });
 
 // GET /api/loyalty/challenges
 router.get('/challenges', auth, (req, res) => {
   const challenges = db.findAll('challenges');
-  // In production, track per-user progress in a user_challenges collection
-  const enriched = challenges.map(c => ({
-    ...c,
-    progress: Math.floor(Math.random() * c.target), // mock for demo
-    completed: false
-  }));
+  const userId = req.user.id;
+
+  // FIX: pehle Math.random() se progress dikhaya jaata tha — ab real data se
+  // calculate karte hain. Ek dedicated user_challenges collection ke bina bhi,
+  // orders/reviews/referrals se directly derive kar sakte hain.
+  const myOrders = db.find('orders', { user_id: userId }).filter(o => o.status !== 'cancelled');
+  const myReviews = db.find('reviews', { user_id: userId });
+  const myReferrals = db.find('referrals', { referrer_id: userId });
+
+  function computeProgress(type) {
+    switch (type) {
+      case 'spend': {
+        // Is hafte (pichhle 7 din) ka total spend
+        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return myOrders
+          .filter(o => new Date(o.created_at).getTime() >= weekAgo)
+          .reduce((sum, o) => sum + (o.total || 0), 0);
+      }
+      case 'new_stores': {
+        const shopIds = new Set();
+        myOrders.forEach(o => (o.items || []).forEach(i => shopIds.add(i.shop_id)));
+        return shopIds.size;
+      }
+      case 'ratings':
+        return myReviews.length;
+      case 'referrals':
+        return myReferrals.length;
+      case 'streak': {
+        // Consecutive din jinme kam se kam ek order hua, aaj se peeche count karte hue
+        const orderDays = new Set(myOrders.map(o => o.created_at.slice(0, 10)));
+        let streak = 0;
+        let cursor = new Date();
+        while (true) {
+          const key = cursor.toISOString().slice(0, 10);
+          if (orderDays.has(key)) { streak++; cursor.setDate(cursor.getDate() - 1); }
+          else break;
+        }
+        return streak;
+      }
+      default:
+        return 0;
+    }
+  }
+
+  const enriched = challenges.map(c => {
+    const progress = Math.min(computeProgress(c.type), c.target);
+    return { ...c, progress, completed: progress >= c.target };
+  });
   res.json({ success: true, challenges: enriched });
 });
 
