@@ -107,8 +107,6 @@ router.get('/analytics/platform', (req, res) => {
   res.json({ success: true, stats: { total_users: users.filter(u => u.role === 'customer').length, total_shops: shops.length, total_orders: orders.length, delivered_orders: deliveredOrders.length, total_revenue: totalRevenue, avg_order_value: deliveredOrders.length ? Math.round(totalRevenue / deliveredOrders.length) : 0, active_delivery_partners: db.find('delivery_partners', { status: 'active' }).length } });
 });
 
-module.exports = router;
-
 // GET /api/misc/razorpay-key — frontend ko public key do
 router.get('/razorpay-key', (_, res) => {
   const key = process.env.RAZORPAY_KEY_ID;
@@ -120,7 +118,6 @@ router.get('/razorpay-key', (_, res) => {
 router.post('/item-requests', auth, (req, res) => {
   const { item_name, description, quantity } = req.body;
   if (!item_name) return res.status(400).json({ success: false, message: 'Item name required' });
-  const { v4: uuidv4 } = require('uuid');
   const request = {
     id: 'ir' + uuidv4().slice(0, 8),
     user_id: req.user.id,
@@ -130,7 +127,12 @@ router.post('/item-requests', auth, (req, res) => {
     created_at: new Date().toISOString(),
     expires_at: new Date(Date.now() + 24*60*60*1000).toISOString()
   };
-  if (!db.findAll('item_requests')) db.data.item_requests = [];
+  // FIX: pehle yahan `if (!db.findAll('item_requests')) db.data.item_requests = []`
+  // tha — db.findAll() kabhi falsy return nahi karta (hamesha array deta hai) toh
+  // yeh condition kabhi true hi nahi hoti thi, aur `db.data` naam ki koi property
+  // exist nahi karti db module pe — agar chal bhi jaata toh crash karta. db.insert
+  // khud collection create kar leta hai agar missing ho, isliye yeh line zaroori
+  // hi nahi thi — hata di.
   db.insert('item_requests', request);
   // Saare shop owners ko notify karo
   const shops = db.findAll('shops');
@@ -150,3 +152,5 @@ router.get('/item-requests', auth, (req, res) => {
   if (req.user.role === 'customer') requests = requests.filter(r => r.user_id === req.user.id);
   res.json({ success: true, requests });
 });
+
+module.exports = router;
