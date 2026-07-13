@@ -1,11 +1,11 @@
 {
-  "name": "Zepply — 10 Min Delivery",
-  "short_name": "Zepply",
+  "name": "Qdoor — 10 Min Delivery",
+  "short_name": "Qdoor",
   "description": "Grocery, Hardware, Stationery — 10-30 min delivery from local stores",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0F172A",
-  "theme_color": "#2563EB",
+  "theme_color": "#F97316",
   "orientation": "portrait",
   "icons": [
     {
