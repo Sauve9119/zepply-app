@@ -12,7 +12,7 @@ const webpush = require('web-push');
 // VAPID keys — Railway Variables mein set karo
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || 'BIm6FHpx1saLQE3JKEEi0JXqGO7gbA6ZkzcianTaO5wQtueh2i-ZWdIRkN_f76m1QJaL4vuoeDaRPuEbAHlPu7o';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || 'qqUyqa6THbdt__l07coMlvk1jsFR9CNYGSOjyTANsmQ';
-webpush.setVapidDetails('mailto:zepply@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE);
+webpush.setVapidDetails('mailto:support@qdoor.in', VAPID_PUBLIC, VAPID_PRIVATE);
 
 // Push karo kisi bhi user ko
 async function sendPushNotification(userId, title, body, tag) {
@@ -20,7 +20,7 @@ async function sendPushNotification(userId, title, body, tag) {
     const subs = db.findAll ? db.findAll('push_subscriptions').filter(s => s.user_id === userId) : [];
     for (const sub of subs) {
       try {
-        await webpush.sendNotification(JSON.parse(sub.subscription), JSON.stringify({ title, body, tag: tag || 'zepply', url: '/' }));
+        await webpush.sendNotification(JSON.parse(sub.subscription), JSON.stringify({ title, body, tag: tag || 'qdoor', url: '/' }));
       } catch (e) {
         // Agar subscription expire ho gayi toh hata do
         if (e.statusCode === 410) db.deleteById && db.deleteById('push_subscriptions', sub.id);
@@ -80,12 +80,12 @@ app.post('/api/push/subscribe', (req, res) => {
 app.get('/api/push/vapid-key', (_, res) => res.json({ success: true, publicKey: VAPID_PUBLIC }));
 
 app.get('/api/health', (_, res) => res.json({
-  status: 'ok', app: 'Zepply API', version: '2.1.0',
+  status: 'ok', app: 'Qdoor API', version: '2.1.0',
   timestamp: new Date().toISOString(), uptime: Math.floor(process.uptime()) + 's'
 }));
 
 app.get('/api', (_, res) => res.json({
-  app: 'Zepply Hyperlocal Delivery API',
+  app: 'Qdoor Hyperlocal Delivery API',
   version: '2.1.0',
   total_endpoints: 41,
   endpoints: {
@@ -119,7 +119,7 @@ wss.on('connection', (ws, req) => {
   const u = new URL(req.url, 'http://localhost');
   const userId = u.searchParams.get('userId');
   if (userId) wsClients.set(userId, ws);
-  ws.send(JSON.stringify({ type: 'connected', message: 'Zepply realtime connected ✅' }));
+  ws.send(JSON.stringify({ type: 'connected', message: 'Qdoor realtime connected ✅' }));
 
   ws.on('message', msg => {
     try {
@@ -137,7 +137,7 @@ wss.on('connection', (ws, req) => {
 // START
 server.listen(PORT, () => {
   console.log('\n========================================');
-  console.log('   Zepply API v2.1 - Started');
+  console.log('   Qdoor API v2.1 - Started');
   console.log('========================================');
   console.log(`API -> http://localhost:${PORT}/api`);
   console.log(`WS  -> ws://localhost:${PORT}`);
