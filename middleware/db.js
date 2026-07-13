@@ -3,82 +3,113 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, '../data/db.json');
 
-function readDB() {
+// FIX: Pehle har call pe disk se poori file read + write hoti thi.
+// Ab ek baar load karke RAM mein cache rakhte hain. Reads cache se milte hain
+// (instant), writes debounce hoke batch mein disk pe jaati hain (100ms window)
+// — 100 users ek second mein aaye toh bhi disk pe sirf 1 write jaayegi, na ki 100.
+
+let cache = null;
+let writeTimer = null;
+let writeInFlight = false;
+let pendingWriteWhileInFlight = false;
+
+function loadDB() {
+  if (cache) return cache;
   try {
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    cache = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
   } catch (e) {
     console.error('DB read error:', e.message);
-    return {};
+    cache = {};
+  }
+  return cache;
+}
+
+function flushToDisk() {
+  if (!cache) return;
+  writeInFlight = true;
+  fs.writeFile(DB_PATH, JSON.stringify(cache, null, 2), (err) => {
+    writeInFlight = false;
+    if (err) console.error('DB write error:', err.message);
+    if (pendingWriteWhileInFlight) {
+      pendingWriteWhileInFlight = false;
+      scheduleWrite();
+    }
+  });
+}
+
+function scheduleWrite() {
+  if (writeInFlight) { pendingWriteWhileInFlight = true; return; }
+  if (writeTimer) return; // already scheduled, will pick up latest cache
+  writeTimer = setTimeout(() => {
+    writeTimer = null;
+    flushToDisk();
+  }, 100);
+}
+
+// Synchronous flush — used on process exit so we never lose a debounced write
+function flushSync() {
+  if (!cache) return;
+  if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(cache, null, 2));
+  } catch (e) {
+    console.error('DB flushSync error:', e.message);
   }
 }
 
-function writeDB(data) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    return true;
-  } catch (e) {
-    console.error('DB write error:', e.message);
-    return false;
-  }
-}
+['SIGINT', 'SIGTERM'].forEach(evt => process.on(evt, () => { flushSync(); process.exit(0); }));
+process.on('beforeExit', flushSync);
 
 // Generic CRUD operations
 const db = {
-  // Find all records in a collection
   findAll: (collection) => {
-    const data = readDB();
+    const data = loadDB();
     return data[collection] || [];
   },
 
-  // Find records matching a filter
   find: (collection, filter = {}) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     return items.filter(item =>
       Object.keys(filter).every(key => item[key] === filter[key])
     );
   },
 
-  // Find one record
   findOne: (collection, filter = {}) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     return items.find(item =>
       Object.keys(filter).every(key => item[key] === filter[key])
     ) || null;
   },
 
-  // Find by ID
   findById: (collection, id) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     return items.find(item => item.id === id) || null;
   },
 
-  // Insert a record
   insert: (collection, record) => {
-    const data = readDB();
+    const data = loadDB();
     if (!data[collection]) data[collection] = [];
     data[collection].push(record);
-    writeDB(data);
+    scheduleWrite();
     return record;
   },
 
-  // Update a record by ID
   updateById: (collection, id, updates) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     const idx = items.findIndex(item => item.id === id);
     if (idx === -1) return null;
     items[idx] = { ...items[idx], ...updates, updated_at: new Date().toISOString() };
     data[collection] = items;
-    writeDB(data);
+    scheduleWrite();
     return items[idx];
   },
 
-  // Update many matching records
   updateMany: (collection, filter, updates) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     let count = 0;
     data[collection] = items.map(item => {
@@ -86,25 +117,23 @@ const db = {
       if (matches) { count++; return { ...item, ...updates, updated_at: new Date().toISOString() }; }
       return item;
     });
-    writeDB(data);
+    scheduleWrite();
     return count;
   },
 
-  // Delete by ID
   deleteById: (collection, id) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     const idx = items.findIndex(item => item.id === id);
     if (idx === -1) return false;
     items.splice(idx, 1);
     data[collection] = items;
-    writeDB(data);
+    scheduleWrite();
     return true;
   },
 
-  // Count records
   count: (collection, filter = {}) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     if (Object.keys(filter).length === 0) return items.length;
     return items.filter(item =>
@@ -112,16 +141,15 @@ const db = {
     ).length;
   },
 
-  // Increment a field
   increment: (collection, id, field, by = 1) => {
-    const data = readDB();
+    const data = loadDB();
     const items = data[collection] || [];
     const idx = items.findIndex(item => item.id === id);
     if (idx === -1) return null;
     items[idx][field] = (items[idx][field] || 0) + by;
     items[idx].updated_at = new Date().toISOString();
     data[collection] = items;
-    writeDB(data);
+    scheduleWrite();
     return items[idx];
   }
 };
