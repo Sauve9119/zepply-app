@@ -48,9 +48,10 @@ function estimateDeliveryWindow(shopIds, custLat, custLng) {
 // devtools se amount tamper kar sakta tha. Ab yeh shared function server-side
 // hi price nikalta hai (products/coupon DB se), jise create-payment-intent aur
 // COD order dono use karte hain — client ka number kabhi trust nahi karte.
-function computePricing(userId, items, coupon_code) {
+function computePricing(userId, items, coupon_code, custLat, custLng) {
   let subtotal = 0;
   const enrichedItems = [];
+  const MAX_DELIVERY_RADIUS_KM = 10;
 
   for (const item of items) {
     const product = db.findById('products', item.product_id);
@@ -58,6 +59,19 @@ function computePricing(userId, items, coupon_code) {
       return { error: `Product ${item.product_id} not available` };
     if (product.stock < item.qty)
       return { error: `${product.name} mein sirf ${product.stock} bacha hai` };
+
+    // FIX: pehle koi bhi shehar se customer order kar sakta tha (jaise Kanpur
+    // se Jaipur ki shop pe) — sirf frontend browse filter tha jo API call se
+    // bypass ho sakta tha. Ab yahan server-side hard check hai: agar customer
+    // location diya hai aur shop us radius se bahar hai, order reject hota hai.
+    const shop = db.findById('shops', product.shop_id);
+    if (custLat != null && custLng != null && shop && typeof shop.lat === 'number' && typeof shop.lng === 'number' && shop.lat !== 0 && shop.lng !== 0) {
+      const dist = distanceKm(shop.lat, shop.lng, parseFloat(custLat), parseFloat(custLng));
+      if (dist > MAX_DELIVERY_RADIUS_KM) {
+        return { error: `${shop.name} aapki delivery range (${MAX_DELIVERY_RADIUS_KM}km) se bahar hai — ${dist.toFixed(1)}km door hai` };
+      }
+    }
+
     const itemTotal = product.price * item.qty;
     subtotal += itemTotal;
     enrichedItems.push({ product_id: item.product_id, shop_id: product.shop_id, qty: item.qty, price: product.price, total: itemTotal });
@@ -128,7 +142,7 @@ router.get('/', auth, (req, res) => {
     const items = (o.items || []).map(item => {
       const product = db.findById('products', item.product_id);
       const shop = db.findById('shops', item.shop_id);
-      return { ...item, product_name: product?.name, product_emoji: product?.emoji, shop_name: shop?.name };
+      return { ...item, product_name: product?.name, product_emoji: product?.emoji, shop_name: shop?.name, shop_lat: shop?.lat, shop_lng: shop?.lng };
     });
     return {
       ...o,
@@ -188,10 +202,12 @@ router.post('/:id/accept', auth, requireRole('delivery'), (req, res) => {
   if (['delivered', 'cancelled'].includes(order.status))
     return res.status(400).json({ success: false, message: 'Ye order available nahi hai' });
 
-  // Assign this delivery partner
+  // FIX: pehle accept karte hi status seedha 'preparing' force ho jaata tha,
+  // chahe shop ne abhi kuch shuru bhi na kiya ho. Ab accept sirf delivery
+  // partner assign karta hai — order ka status waisa hi rehta hai jaisa tha,
+  // shop hi 'preparing' → 'ready' transitions control karta hai.
   const updated = db.updateById('orders', req.params.id, {
-    delivery_partner_id: req.user.id,
-    status: 'preparing'
+    delivery_partner_id: req.user.id
   });
 
   // Customer ko notify karo
@@ -212,10 +228,10 @@ router.post('/:id/accept', auth, requireRole('delivery'), (req, res) => {
 // aata — hamesha yahin DB se recompute hota hai.
 router.post('/create-payment-intent', auth, requireRole('customer'), async (req, res) => {
   try {
-    const { items, coupon_code } = req.body;
+    const { items, coupon_code, lat, lng } = req.body;
     if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
 
-    const pricing = computePricing(req.user.id, items, coupon_code);
+    const pricing = computePricing(req.user.id, items, coupon_code, lat, lng);
     if (pricing.error) return res.status(400).json({ success: false, message: pricing.error });
 
     const keyId = process.env.RAZORPAY_KEY_ID;
@@ -308,7 +324,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       db.updateById('payment_intents', intent.id, { used: true });
     } else {
       if (!items || !items.length) return res.status(400).json({ success: false, message: 'Cart is empty' });
-      pricing = computePricing(req.user.id, items, coupon_code);
+      pricing = computePricing(req.user.id, items, coupon_code, lat, lng);
       if (pricing.error) return res.status(400).json({ success: false, message: pricing.error });
       coupon_used_final = pricing.coupon_used;
     }
@@ -384,7 +400,11 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
 router.put('/:id/status', auth, (req, res) => {
   try {
     const { status } = req.body;
-    const VALID = ['confirmed', 'preparing', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'];
+    // FIX: pehle 'ready' naam ka koi status hi nahi tha, aur koi transition
+    // validation nahi thi — delivery partner order 'confirmed' rehte hue hi
+    // seedha 'picked_up' mark kar sakta tha, shop ne ready kiya ho ya na ho.
+    // Ab explicit 'ready' status hai aur sirf allowed next-steps hi accept hote hain.
+    const VALID = ['confirmed', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'];
     if (!VALID.includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
 
     const order = db.findById('orders', req.params.id);
@@ -395,13 +415,37 @@ router.put('/:id/status', auth, (req, res) => {
       const myShops = db.find('shops', { owner_id: req.user.id }).map(s => s.id);
       if (!order.items || !order.items.some(i => myShops.includes(i.shop_id)))
         return res.status(403).json({ success: false, message: 'Access denied' });
+      if (!['preparing', 'ready', 'cancelled'].includes(status))
+        return res.status(403).json({ success: false, message: 'Shop sirf preparing/ready/cancelled set kar sakta hai' });
     }
-    // Delivery sirf apna assigned order update kar sakta hai
-    if (req.user.role === 'delivery' && order.delivery_partner_id !== req.user.id)
-      return res.status(403).json({ success: false, message: 'Pehle order accept karo' });
-    // Customer sirf cancel kar sakta hai
-    if (req.user.role === 'customer' && status !== 'cancelled')
-      return res.status(403).json({ success: false, message: 'Customer sirf cancel kar sakta hai' });
+    // Delivery sirf apna assigned order, aur sirf pickup/enroute/delivered update kar sakta hai
+    if (req.user.role === 'delivery') {
+      if (order.delivery_partner_id !== req.user.id)
+        return res.status(403).json({ success: false, message: 'Pehle order accept karo' });
+      if (!['picked_up', 'out_for_delivery', 'delivered'].includes(status))
+        return res.status(403).json({ success: false, message: 'Delivery partner sirf pickup/enroute/delivered set kar sakta hai' });
+    }
+    // Customer sirf cancel kar sakta hai, aur sirf pickup se pehle
+    if (req.user.role === 'customer') {
+      if (status !== 'cancelled') return res.status(403).json({ success: false, message: 'Customer sirf cancel kar sakta hai' });
+      if (['picked_up', 'out_for_delivery', 'delivered'].includes(order.status))
+        return res.status(400).json({ success: false, message: 'Pickup ke baad order cancel nahi ho sakta' });
+    }
+
+    // Sequential transition enforce karo — status kabhi step skip nahi kar sakta
+    const STATUS_TRANSITIONS = {
+      confirmed: ['preparing', 'cancelled'],
+      preparing: ['ready', 'cancelled'],
+      ready: ['picked_up', 'cancelled'],
+      picked_up: ['out_for_delivery'],
+      out_for_delivery: ['delivered'],
+      delivered: [],
+      cancelled: []
+    };
+    const allowedNext = STATUS_TRANSITIONS[order.status] || [];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({ success: false, message: `Order abhi '${order.status}' hai, seedha '${status}' pe nahi ja sakta` });
+    }
 
     // Cancel pe sab wapas karo
     if (status === 'cancelled' && order.status !== 'cancelled') {
@@ -424,7 +468,7 @@ router.put('/:id/status', auth, (req, res) => {
     if (status === 'picked_up') updates.picked_up_at = new Date().toISOString();
     const updated = db.updateById('orders', req.params.id, updates);
 
-    const msgs = { preparing: 'Order ban raha hai 🍳', picked_up: 'Order pick up ho gaya 📦', out_for_delivery: 'Order delivery ke liye nikla! 🏍️', delivered: 'Order deliver ho gaya! Rating do ⭐', cancelled: 'Order cancel ho gaya' };
+    const msgs = { preparing: 'Order ban raha hai 🍳', ready: 'Order ready hai, pickup hone wala hai 📦', picked_up: 'Order pick up ho gaya 📦', out_for_delivery: 'Order delivery ke liye nikla! 🏍️', delivered: 'Order deliver ho gaya! Rating do ⭐', cancelled: 'Order cancel ho gaya' };
     if (msgs[status]) {
       db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: order.user_id, title: msgs[status], body: `Order #${req.params.id}`, read: false, created_at: new Date().toISOString() });
     }
@@ -438,8 +482,10 @@ router.put('/:id/status', auth, (req, res) => {
       }
     }
 
-    // Jab shop owner 'preparing' status set kare toh delivery partners ko notify karo
-    if (status === 'preparing') {
+    // Jab shop owner 'ready' status set kare toh delivery partners ko notify karo
+    // FIX: pehle ye 'preparing' pe fire hota tha — jabki us waqt order abhi
+    // bana hi raha hota tha, pickup ke liye ready nahi hota tha. Ab 'ready' pe fire hoga.
+    if (status === 'ready') {
       const allPartners = db.findAll('delivery_partners').filter(dp => dp.status === 'active');
       const orderShops = [...new Set((order.items||[]).map(i=>i.shop_id))];
       const shopNames = orderShops.map(sid=>{ const s=db.findById('shops',sid); return s?.name||'Shop'; }).join(', ');
@@ -454,6 +500,7 @@ router.put('/:id/status', auth, (req, res) => {
     // Real-time broadcast via WebSocket + Push Notification
     const statusLabels = {
       preparing: 'Order prepare ho raha hai 🍳',
+      ready: 'Order pickup ke liye ready hai 📦',
       picked_up: 'Delivery partner ne pick up kar liya 📦',
       out_for_delivery: 'Order raste mein hai! 🏍️',
       delivered: 'Order deliver ho gaya! 🎉',
@@ -487,11 +534,11 @@ router.get('/:id/track', auth, (req, res) => {
   const order = db.findById('orders', req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  const statusFlow = ['confirmed', 'preparing', 'picked_up', 'out_for_delivery', 'delivered'];
+  const statusFlow = ['confirmed', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered'];
   const currentIdx = statusFlow.indexOf(order.status);
   const timeline = statusFlow.map((s, i) => ({
     status: s,
-    label: { confirmed: 'Order Confirmed', preparing: 'Preparing', picked_up: 'Picked Up', out_for_delivery: 'Out for Delivery', delivered: 'Delivered' }[s],
+    label: { confirmed: 'Order Confirmed', preparing: 'Preparing', ready: 'Ready for Pickup', picked_up: 'Picked Up', out_for_delivery: 'Out for Delivery', delivered: 'Delivered' }[s],
     completed: i <= currentIdx, active: i === currentIdx,
     timestamp: i <= currentIdx ? new Date(Date.now() - (currentIdx - i) * 10 * 60000).toISOString() : null
   }));
