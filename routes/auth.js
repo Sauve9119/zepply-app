@@ -141,14 +141,19 @@ router.post('/register', async (req, res) => {
 
     // Shop owner — auto-create their shop so products can be added right away
     if (role === 'shopowner') {
-      const { shop_name, shop_address, shop_category, shop_gst } = req.body;
+      const { shop_name, shop_address, shop_category, shop_gst, shop_lat, shop_lng } = req.body;
       db.insert('shops', {
         id: 's' + uid(), owner_id: newUser.id,
         name: shop_name || (name + ' Store'),
         category: shop_category || 'Grocery',
         description: '', emoji: '🏪',
         address: shop_address || '',
-        lat: null, lng: null,
+        // FIX: pehle lat/lng hamesha null save hoti thi — koi geolocation capture
+        // nahi hoti thi. Isse shop kabhi bhi "nearby" filter mein sahi se nahi
+        // aati thi (ya galat tareeke se sab jagah dikh jaati thi). Ab agar
+        // frontend ne browser geolocation se coordinates bheji hain toh save karte hain.
+        lat: (typeof shop_lat === 'number') ? shop_lat : null,
+        lng: (typeof shop_lng === 'number') ? shop_lng : null,
         rating: 0, total_reviews: 0, is_open: true,
         delivery_time: '20-30 min',
         min_order: 100, delivery_charge: 25,
