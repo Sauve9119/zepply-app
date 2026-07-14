@@ -45,8 +45,9 @@ router.get('/active-orders', auth, requireRole('delivery'), (req, res) => {
       const user = db.findById('users', o.user_id);
       const items = (o.items || []).map(item => {
         const shop = db.findById('shops', item.shop_id);
+        const owner = shop ? db.findById('users', shop.owner_id) : null;
         const product = db.findById('products', item.product_id);
-        return { ...item, shop_name: shop?.name, shop_address: shop?.address, shop_lat: shop?.lat, shop_lng: shop?.lng, product_name: product?.name };
+        return { ...item, shop_name: shop?.name, shop_address: shop?.address, shop_lat: shop?.lat, shop_lng: shop?.lng, shop_phone: owner?.phone, product_name: product?.name };
       });
       return { ...o, customer_name: user?.name, customer_phone: user?.phone, items };
     });
@@ -56,7 +57,7 @@ router.get('/active-orders', auth, requireRole('delivery'), (req, res) => {
 // GET /api/delivery/route — optimised pickup + drop route
 router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const orders = db.find('orders', { delivery_partner_id: req.user.id })
-    .filter(o => ['confirmed', 'preparing', 'picked_up'].includes(o.status));
+    .filter(o => ['confirmed', 'preparing', 'ready', 'picked_up'].includes(o.status));
 
   if (!orders.length) {
     return res.json({ success: true, message: 'No active orders', route: [] });
@@ -66,8 +67,11 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const shopIds = [...new Set(orders.flatMap(o => (o.items || []).map(i => i.shop_id)))];
   const pickups = shopIds.map(sid => {
     const shop = db.findById('shops', sid);
+    const owner = shop ? db.findById('users', shop.owner_id) : null;
     const shopOrders = orders.filter(o => o.items.some(i => i.shop_id === sid));
-    return { type: 'pickup', shop_id: sid, name: shop?.name, address: shop?.address, lat: shop?.lat, lng: shop?.lng, orders: shopOrders.map(o => o.id), emoji: shop?.emoji };
+    // FIX: shop owner ka phone number missing tha — delivery partner ko pickup
+    // pe shop se contact karne ke liye chahiye hota hai.
+    return { type: 'pickup', shop_id: sid, name: shop?.name, address: shop?.address, lat: shop?.lat, lng: shop?.lng, phone: owner?.phone, orders: shopOrders.map(o => o.id), emoji: shop?.emoji, ready: shopOrders.every(o => ['ready','picked_up'].includes(o.status)) };
   });
 
   // Collect drops
