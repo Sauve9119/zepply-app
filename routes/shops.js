@@ -24,7 +24,7 @@ router.get('/all/products', (req, res) => {
 
 // GET /api/shops
 router.get('/', (req, res) => {
-  const { category, lat, lng, radius = 5, search } = req.query;
+  const { category, lat, lng, radius = 10, search } = req.query;
   let shops = db.findAll('shops');
   if (category) shops = shops.filter(s => s.category.toLowerCase() === category.toLowerCase());
   if (search) shops = shops.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
@@ -40,7 +40,12 @@ router.get('/', (req, res) => {
     }
     return { ...s, product_count: prods.length, distance_km: distKm ? distKm.toFixed(2) : null };
   });
-  if (lat && lng) shops = shops.filter(s => !s.distance_km || !s.lat || !s.lng || s.lat === 0 || s.lng === 0 || parseFloat(s.distance_km) <= parseFloat(radius));
+  // FIX: pehle jis shop ka lat/lng missing tha wo radius filter ko poori tarah
+  // bypass kar deta tha (chahe customer 1000km door ho) — Kanpur se koi bhi
+  // Jaipur ki shop se order kar sakta tha. Ab agar customer location diya hai,
+  // toh sirf verified-nearby shops hi dikhengi; coordinates-less shops ko
+  // "unknown distance" maan ke hide kar dete hain jab tak unka location set na ho.
+  if (lat && lng) shops = shops.filter(s => s.distance_km !== null && parseFloat(s.distance_km) <= parseFloat(radius));
   res.json({ success: true, shops, total: shops.length });
 });
 
