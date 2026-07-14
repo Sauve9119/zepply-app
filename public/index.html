@@ -472,7 +472,10 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 </div></div>
 
 <!-- Floating WhatsApp Help Button -->
-<a href="https://wa.me/918769769949?text=Qdoor+App+mein+ek+problem+hai%3A+" target="_blank" id="wa-float" style="position:fixed;bottom:80px;right:16px;z-index:200;width:48px;height:48px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.25);text-decoration:none;" title="Help? WhatsApp karo">
+<!-- FIX: pehle right:16px pe tha — order cards ke right-aligned buttons (Rate,
+     Call Partner/Shop) iske peeche chup jaate the. Ab left side pe hai jaha
+     koi action button nahi hota. -->
+<a href="https://wa.me/918769769949?text=Qdoor+App+mein+ek+problem+hai%3A+" target="_blank" id="wa-float" style="position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:16px;z-index:90;width:46px;height:46px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.25);text-decoration:none;" title="Help? WhatsApp karo">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="white">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
   </svg>
@@ -766,8 +769,17 @@ async function showScreen(name) {
   Object.values(NAVS).flat().forEach(n => { const e = document.getElementById('ni-' + n.s); if (e) e.classList.remove('active'); });
   const e = document.getElementById('ni-' + name); if (e) e.classList.add('active');
   const mc = document.getElementById('mc');
-  mc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--t3)">Loading...</div>';
+  // FIX: pehle har screen switch pe turant "Loading..." dikha ke content clear
+  // kar diya jaata tha, chahe data 50ms mein hi aa jaaye — isse har navigation
+  // pe ek jhatka/flicker mehsoos hota tha. Ab loader sirf tabhi dikhta hai jab
+  // fetch genuinely 400ms se zyada le — fast loads bilkul instant feel karte hain.
+  let loaderShown = false;
+  const loaderTimer = setTimeout(() => {
+    mc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--t3)">Loading...</div>';
+    loaderShown = true;
+  }, 400);
   const html = await SCREENS[name]?.();
+  clearTimeout(loaderTimer);
   mc.innerHTML = html || '<div style="padding:1rem;color:var(--t3)">Screen not found</div>';
   // Post-render hooks
   if (name === 'stores') setTimeout(initMap, 200);
@@ -859,7 +871,8 @@ login: async () => `
 
 // CUSTOMER HOME
 home: async () => {
-  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null})) : r({lat:null,lng:null}));
+  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null}),{timeout:6000}) : r({lat:null,lng:null}));
+  window._myCoords = myCoords; // checkout ke time order lat/lng bhejne ke liye
   const locParam = myCoords.lat ? '?lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=10' : '';
   const [shopsRes, allProdsRes] = await Promise.all([
     api('GET', '/api/shops'+locParam),
@@ -881,7 +894,27 @@ home: async () => {
     if (countEl) countEl.textContent = freeLeft + ' free order' + (freeLeft>1?'s':'') + ' baaki hain!';
   }
   const lbl = document.getElementById('location-label');
-    if (lbl) lbl.textContent = '📍 Aapki location';
+    // FIX: pehle hamesha generic "📍 Aapki location" text dikhta tha — coords
+    // detect hone ke baad bhi asli jagah ka naam kabhi nahi dikhta tha (weather
+    // app jaisa nahi tha). Ab reverse-geocode karke actual area/locality naam
+    // dikhate hain, address field mein bhi auto-fill kar dete hain.
+    if (lbl) lbl.textContent = '📍 Location detect ho gayi...';
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${myCoords.lat}&lon=${myCoords.lng}&zoom=16`)
+      .then(r => r.json())
+      .then(data => {
+        const a = data.address || {};
+        const areaName = a.suburb || a.neighbourhood || a.village || a.town || a.city_district || a.city || 'Current Location';
+        const cityName = a.city || a.town || a.state_district || '';
+        const shortAddr = [areaName, cityName].filter(Boolean).join(', ');
+        if (lbl) lbl.textContent = '📍 ' + (shortAddr || 'Current Location');
+        window._detectedAddress = data.display_name || shortAddr;
+        const addrField = document.getElementById('delivery-address');
+        if (addrField && !addrField.value) addrField.value = data.display_name || shortAddr;
+      })
+      .catch(() => { if (lbl) lbl.textContent = '📍 Current Location'; });
+  } else {
+    const lbl = document.getElementById('location-label');
+    if (lbl) lbl.textContent = '📍 Location on karo — nearby stores dekhne ke liye';
   }
 
   // Categories
@@ -995,22 +1028,24 @@ orders: async () => {
         <div class="fl g1">
           ${o.delivery_partner_phone ? `<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Partner</a>` : '<span class="txs tt">⏳ Partner assign ho raha hai</span>'}
           ${o.shop_owner_phone ? `<a href="tel:${o.shop_owner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Shop</a>` : ''}
-          <button class="btn bp bsm" onclick="currentOrderId='${o.id}';openModal('m-rate')">⭐ Rate</button>
         </div>
       </div>
     </div>`).join('') : ''}
     <h2 class="st ${active.length?'mt2':''}">Order History</h2>
     ${past.length ? past.map(o=>`<div class="card">
-      <div class="fl ic jb"><span class="fw7 tsm">#${o.id.slice(-8).toUpperCase()}</span><span class="tag tg">✅ Delivered</span></div>
+      <div class="fl ic jb"><span class="fw7 tsm">#${o.id.slice(-8).toUpperCase()}</span>${o.status==='cancelled'?'<span class="tag tr">❌ Cancelled</span>':'<span class="tag tg">✅ Delivered</span>'}</div>
       <div class="tsm tm mt1">${o.items?.map(i=>i.product_name).join(', ')}</div>
       <div class="fl ic jb mt1">
         <span class="txs tt">${new Date(o.created_at).toLocaleDateString('en-IN')}</span>
         <div class="fl g1 ic">
-          <span class="txs tw">+${o.loyalty_earned} coins</span>
+          ${o.status!=='cancelled'?`<span class="txs tw">+${o.loyalty_earned} coins</span>`:''}
           <span class="fw7 tsm" style="color:var(--a)">₹${o.total}</span>
           <button class="btn bo bsm" onclick="reorder(${JSON.stringify(o.items?.map(i=>i.product_id)).replace(/"/g,"'")})">Reorder</button>
         </div>
       </div>
+      ${o.status==='delivered' ? `<div class="mt1" style="text-align:right">
+        <button class="btn bp bsm" onclick="currentOrderId='${o.id}';openModal('m-rate')">⭐ Rate Order</button>
+      </div>` : ''}
     </div>`).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">No orders yet</div>'}
     ${!orders.length ? `<div class="card" style="text-align:center;padding:2rem"><div style="font-size:3rem;margin-bottom:.75rem">📭</div><div class="fw7">No orders yet</div><button class="btn bp mt2" onclick="showScreen(\'home\')">Start Shopping →</button></div>` : ''}`;
 },
@@ -1142,8 +1177,8 @@ sorders: async () => {
     <div class="fl ic jb mb1"><h2 class="st" style="margin:0">📋 Orders</h2>
     <button class="btn bp bsm" onclick="showToast('📥 Export downloaded!')">📥 Export</button></div>
     <div style="display:flex;gap:.35rem;margin-bottom:.75rem;flex-wrap:wrap" id="order-filter-btns">
-      ${['all','confirmed','preparing','out_for_delivery','delivered','cancelled'].map((s,i)=>{
-        const label = ['All','Confirmed','Preparing','Out for Delivery','Delivered','Cancelled'][i];
+      ${['all','confirmed','preparing','ready','out_for_delivery','delivered','cancelled'].map((s,i)=>{
+        const label = ['All','Confirmed','Preparing','Ready','Out for Delivery','Delivered','Cancelled'][i];
         const cnt = s==='all'?orders.length:orders.filter(o=>o.status===s).length;
         return `<button class="btn bo bsm" style="font-size:.7rem" onclick="filterShopOrders('${s}',this)">${label} (${cnt})</button>`;
       }).join('')}
@@ -1151,12 +1186,13 @@ sorders: async () => {
     <div id="shop-orders-list">
     ${orders.length?orders.map(o=>`<div class="card sorder" data-status="${o.status}" data-oid="${o.id}">
       <div class="fl ic jb"><span class="fw7 tsm">#${o.id.slice(-8).toUpperCase()} · ${o.customer_name||'Customer'}</span>
-      <span class="tag status-badge ${o.status==='confirmed'?'tb':o.status==='preparing'?'tw':o.status==='delivered'?'tg':o.status==='cancelled'?'tr':'tt'}">${o.status==='cancelled'?'❌ Cancelled':o.status==='delivered'?'✅ Delivered':o.status.replace(/_/g,' ')}</span></div>
+      <span class="tag status-badge ${o.status==='confirmed'?'tb':o.status==='preparing'?'tw':o.status==='ready'?'tg':o.status==='delivered'?'tg':o.status==='cancelled'?'tr':'tt'}">${o.status==='cancelled'?'❌ Cancelled':o.status==='delivered'?'✅ Delivered':o.status==='ready'?'📦 Ready':o.status.replace(/_/g,' ')}</span></div>
       <div class="tsm tm mt1">${o.items?.map(i=>i.product_name+' ×'+i.qty).join(', ')}</div>
       <div class="tsm mt1">📍 <strong>${o.address||'Address nahi diya'}</strong></div>
       <div class="fl g1 mt1" style="flex-wrap:wrap">
         ${o.status==='confirmed'?`<button class="btn ba bsm" onclick="updateOrderStatus('${o.id}','preparing')">✅ Accept</button><button class="btn bsm" style="background:var(--dl);color:var(--d);border:none" onclick="updateOrderStatus('${o.id}','cancelled')">❌ Reject</button>`:''}
-        ${o.status==='preparing'?`<button class="btn bp bsm" onclick="updateOrderStatus('${o.id}','picked_up')">📦 Ready</button>`:''}
+        ${o.status==='preparing'?`<button class="btn bp bsm" onclick="updateOrderStatus('${o.id}','ready')">📦 Mark Ready for Pickup</button>`:''}
+        ${o.status==='ready'?`<span class="tag tg" style="font-size:.7rem">⏳ Delivery partner ke pickup ka wait</span>`:''}
         ${o.customer_phone?`<a href="tel:${o.customer_phone}" class="btn bo bsm" style="text-decoration:none">📞 Customer</a>`:''}
         ${o.delivery_partner_phone?`<a href="tel:${o.delivery_partner_phone}" class="btn bo bsm" style="text-decoration:none">📞 Partner</a>`:''}
         <span class="txs tt" style="margin-left:auto">${new Date(o.created_at).toLocaleString('en-IN')}</span>
@@ -1264,15 +1300,20 @@ dlhome: async () => {
   const e = earn.earnings || {};
   const ordersRes = await api('GET', '/api/orders');
   const allOrders = ordersRes.orders || [];
-  const available = allOrders.filter(o => !o.delivery_partner_id && o.status === 'preparing');
+  const available = allOrders.filter(o => !o.delivery_partner_id && o.status === 'ready');
   const mine = allOrders.filter(o => o.delivery_partner_id === user?.id && !['delivered','cancelled'].includes(o.status));
+  // FIX: pehle 'confirmed'/'preparing' status mein hi "✅ Picked Up" button dikhta
+  // (aur click hone par) tha — shop ne ready mark kiya ho ya na ho. Ab pickup
+  // sirf tabhi allowed hai jab order status 'ready' ho.
   const statusBtn = o => {
-    if (o.status==='confirmed'||o.status==='preparing') return '<button class="btn bp bsm" onclick="updateDlStatus(\''+o.id+'\',\'picked_up\')">✅ Picked Up</button>';
+    if (o.status==='confirmed'||o.status==='preparing') return '<span class="txs tt">⏳ Shop order taiyar kar raha hai...</span>';
+    if (o.status==='ready') return '<button class="btn bp bsm" onclick="updateDlStatus(\''+o.id+'\',\'picked_up\')">✅ Picked Up</button>';
     if (o.status==='picked_up') return '<button class="btn ba bsm" onclick="updateDlStatus(\''+o.id+'\',\'out_for_delivery\')">🚀 Out for Delivery</button>';
     if (o.status==='out_for_delivery') return '<button class="btn ba bsm" onclick="updateDlStatus(\''+o.id+'\',\'delivered\')">✅ Delivered</button>';
     return '';
   };
-  const mineHtml = mine.map(o => '<div class="card" style="border:2px solid var(--a)"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tg">'+o.status.replace(/_/g,' ')+'</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">💰 ₹'+o.total+' · '+(o.items&&o.items.length)+' items</div><div class="fl g1 mt1">'+statusBtn(o)+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.address||'')+'" target="_blank" class="btn bp bsm">🗺️ Maps</a></div></div>').join('');
+  // FIX: shop aur customer dono ke phone number + call button missing the.
+  const mineHtml = mine.map(o => '<div class="card" style="border:2px solid var(--a)"><div class="fl ic jb mb1"><span class="fw7 tsm">#'+o.id.slice(-8).toUpperCase()+'</span><span class="tag tg">'+o.status.replace(/_/g,' ')+'</span></div><div class="tsm">👤 '+(o.customer_name||'Customer')+'</div><div class="tsm mt1">📍 <strong>'+(o.address||'Address nahi diya')+'</strong></div><div class="tsm tm mt1">💰 ₹'+o.total+' · '+(o.items&&o.items.length)+' items</div><div class="fl g1 mt1" style="flex-wrap:wrap">'+(o.shop_owner_phone?'<a href="tel:'+o.shop_owner_phone+'" class="btn bo bsm" style="text-decoration:none">📞 Shop'+(o.shop_owner_name?' ('+o.shop_owner_name+')':'')+'</a>':'')+(o.customer_phone?'<a href="tel:'+o.customer_phone+'" class="btn bo bsm" style="text-decoration:none">📞 Customer</a>':'')+'</div><div class="fl g1 mt1">'+statusBtn(o)+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.address||'')+'" target="_blank" class="btn bp bsm">🗺️ Maps</a></div></div>').join('');
   // Group by address for bulk delivery
   const grouped = {};
   available.forEach(o => {
@@ -1286,7 +1327,7 @@ dlhome: async () => {
   const availHtml = Object.values(grouped).map(g => {
     const isBulk = g.orders.length > 1;
     const ids = g.orders.map(o=>o.id).join(',');
-    const shopLat = g.orders[0]?.shop_lat, shopLng = g.orders[0]?.shop_lng;
+    const shopLat = g.orders[0]?.items?.[0]?.shop_lat, shopLng = g.orders[0]?.items?.[0]?.shop_lng;
     const dist = myPos && shopLat ? haversineKm(myPos.lat,myPos.lng,shopLat,shopLng) : null;
     const outOfRange = dist !== null && dist > 10;
     const distLabel = dist ? (dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km')+' away' : '';
@@ -1421,7 +1462,7 @@ function renderShopCard(store, prods = []) {
       <div class="fl g1 ic">${openTag}</div>
     </div>
     ${prods.slice(0,8).map(p=>`<div class="pr">
-      <div style="width:42px;height:42px;background:var(--s3);border-radius:10px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center">${p.image_url?`<img src="${p.image_url}" width="42" height="42" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<span style=font-size:1.3rem>${p.emoji||chr(128230)}</span>'">`:('<span style="font-size:1.3rem">'+( p.emoji||'📦')+'</span>')}</div>
+      <div style="width:42px;height:42px;background:var(--s3);border-radius:10px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center">${p.image_url?`<img src="${p.image_url}" width="42" height="42" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<span style=font-size:1.3rem>📦</span>'">`:('<span style="font-size:1.3rem">'+( p.emoji||'📦')+'</span>')}</div>
       <div class="pi">
         <div class="pn">${esc(p.name)}</div>
         <div class="pu">${p.unit}${p.stock>0&&p.stock<5?' · <span style="color:var(--d);font-weight:600;font-size:.65rem">Only ${p.stock} left!</span>':''}${p.stock===0?' · <span style="color:var(--t3)">Out of stock</span>':''}</div>
@@ -1556,7 +1597,7 @@ async function placeOrder() {
     // 'awaiting_payment' pe atka rehta). Ab server se signed payment intent
     // lete hain — amount server-locked hai, aur success ke baad signature
     // verify karke hi order 'paid' banta hai.
-    const intentRes = await api('POST', '/api/orders/create-payment-intent', { items, coupon_code: couponApplied?.code });
+    const intentRes = await api('POST', '/api/orders/create-payment-intent', { items, coupon_code: couponApplied?.code, lat: window._myCoords?.lat, lng: window._myCoords?.lng });
     if (!intentRes.success) { showToast('❌ ' + (intentRes.message || 'Payment setup incomplete — COD use karo')); return; }
 
     const options = {
@@ -1570,6 +1611,7 @@ async function placeOrder() {
         // Payment ho gaya — ab backend signature verify karke order finalize karega
         const res = await api('POST', '/api/orders', {
           address,
+          lat: window._myCoords?.lat, lng: window._myCoords?.lng,
           payment_method: 'online',
           razorpay_order_id: response.razorpay_order_id,
           razorpay_payment_id: response.razorpay_payment_id,
@@ -1596,6 +1638,7 @@ async function placeOrder() {
 
   const res = await api('POST', '/api/orders', {
     items, address,
+    lat: window._myCoords?.lat, lng: window._myCoords?.lng,
     coupon_code: couponApplied?.code,
     payment_method: 'cod'
   });
@@ -1656,9 +1699,33 @@ function setHomeMode(mode) {
         <div style="color:var(--p);font-size:1.2rem">›</div>
       </div>`).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi store nahi mila</div>';
   } else {
-    // Product mode: show all products with shop name
+    // FIX: pehle "product mode" bhi shop-grouped cards hi dikhata tha (store mode
+    // jaisa hi lagta tha), aur agar kisi product ka emoji missing ho toh
+    // renderShopCard() ke andar `chr(128230)` call hoti thi jo kabhi define hi
+    // nahi hui thi — ye poore listing ko crash kar deta tha (ReferenceError).
+    // Ab product mode ek flat product-first grid hai, dukaan ka naam sirf chota
+    // sa side mein — jaisa maanga gaya tha.
     const shops = window._cachedShops || [];
     const allProds = window._cachedProds || [];
+    const shopById = {};
+    shops.forEach(s => shopById[s.id] = s);
+    const visibleProds = allProds.filter(p => shopById[p.shop_id]); // sirf nearby shops ke products
+    sl.innerHTML = visibleProds.length ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">` + visibleProds.map(p => {
+      const shop = shopById[p.shop_id];
+      return `<div class="card" style="padding:.6rem">
+        <div style="width:100%;aspect-ratio:1;background:var(--s3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin-bottom:.4rem;overflow:hidden">${p.image_url?`<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<span style=font-size:1.8rem>📦</span>'">`:(p.emoji||'📦')}</div>
+        <div style="font-weight:700;font-size:.82rem;line-height:1.2">${esc(p.name)}</div>
+        <div style="font-size:.65rem;color:var(--t3);margin-top:2px">🏪 ${esc(shop?.name||'')}</div>
+        <div style="font-size:.68rem;color:var(--t2);margin-top:1px">${p.unit||''}${p.stock>0&&p.stock<5?' · <span style="color:var(--d);font-weight:600">Only '+p.stock+' left</span>':''}${p.stock===0?' · <span style="color:var(--t3)">Out of stock</span>':''}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem">
+          <div>
+            <span style="font-weight:800;font-size:.88rem">₹${p.price}</span>
+            ${p.discount>0?`<span style="font-size:.68rem;color:var(--t3);text-decoration:line-through;margin-left:4px">₹${p.mrp}</span>`:''}
+          </div>
+          <div id="c-${p.id}">${p.stock===0?'':renderAddBtn(p)}</div>
+        </div>
+      </div>`;
+    }).join('') + `</div>` : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi product nahi mila</div>';
     sl.innerHTML = shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('') || '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi product nahi mila</div>';
   }
 }
@@ -2221,11 +2288,24 @@ async function handleRegister() {
   const verifyRes = await api('POST', '/api/auth/verify-otp', { email, otp }, false);
   if (!verifyRes.success) return showToast('❌ ' + verifyRes.message);
 
+  // FIX: shop lat/lng pehle kabhi capture nahi hoti thi (hamesha null save
+  // hoti). Ab registration ke time hi browser geolocation se auto-capture
+  // karte hain — shop owner ko kuch manually enter nahi karna padta.
+  let shopCoords = { lat: null, lng: null };
+  if (r === 'shopowner' && navigator.geolocation) {
+    shopCoords = await new Promise(res => navigator.geolocation.getCurrentPosition(
+      p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => res({ lat: null, lng: null }),
+      { timeout: 6000 }
+    ));
+  }
+
   const extraData = r === 'shopowner' ? {
     shop_name: document.getElementById('rg-shop-name')?.value?.trim(),
     shop_address: document.getElementById('rg-shop-address')?.value?.trim(),
     shop_category: document.getElementById('rg-shop-cat')?.value,
-    shop_gst: document.getElementById('rg-gst')?.value?.trim()
+    shop_gst: document.getElementById('rg-gst')?.value?.trim(),
+    shop_lat: shopCoords.lat, shop_lng: shopCoords.lng
   } : {};
   const ok = await doRegisterWithExtra(name, email, phone, pwd, r, extraData);
   if (ok) { connectWS(); subscribePush(); const first = NAVS[role][0].s; showScreen(first); }
