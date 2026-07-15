@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
+const { markupPrice } = require('../middleware/pricing');
 
 // ===== PRODUCTS (global browse - MUST be before /:id routes) =====
 router.get('/all/products', (req, res) => {
@@ -15,9 +16,12 @@ router.get('/all/products', (req, res) => {
     (p.category && p.category.toLowerCase().includes(search.toLowerCase()))
   );
   if (on_sale === 'true') products = products.filter(p => p.discount > 0);
+  // FIX: pehle shop ka raw price hi seedha customer ko dikhta/bikta tha — koi
+  // platform commission track hi nahi hoti thi. Ab customer-facing browsing mein
+  // commission-inclusive price dikhta hai (shop apna base price hi set karta hai).
   products = products.map(p => {
     const shop = db.findById('shops', p.shop_id);
-    return { ...p, shop_name: shop ? shop.name : 'Unknown', shop_emoji: shop ? shop.emoji : '🏪' };
+    return { ...p, price: markupPrice(p.price), mrp: p.mrp ? markupPrice(p.mrp) : p.mrp, shop_name: shop ? shop.name : 'Unknown', shop_emoji: shop ? shop.emoji : '🏪' };
   });
   res.json({ success: true, products, total: products.length });
 });
@@ -38,7 +42,7 @@ router.get('/', (req, res) => {
       const a = Math.sin(dLat/2)**2 + Math.cos(parseFloat(lat)*Math.PI/180) * Math.cos(s.lat*Math.PI/180) * Math.sin(dLng/2)**2;
       distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
-    return { ...s, product_count: prods.length, distance_km: distKm ? distKm.toFixed(2) : null };
+    return { ...s, product_count: prods.length, distance_km: distKm !== null ? distKm.toFixed(2) : null };
   });
   // FIX: pehle jis shop ka lat/lng missing tha wo radius filter ko poori tarah
   // bypass kar deta tha (chahe customer 1000km door ho) — Kanpur se koi bhi
@@ -100,13 +104,24 @@ router.put('/:id/toggle', auth, requireRole('shopowner'), (req, res) => {
   res.json({ success: true, is_open: updated.is_open });
 });
 
-// GET /api/shops/:shopId/products
+// GET /api/shops/:shopId/products — customer-facing (commission-inclusive prices)
 router.get('/:shopId/products', (req, res) => {
   const { category, search, on_sale } = req.query;
   let products = db.findAll('products').filter(p => p.shop_id === req.params.shopId && p.is_active === true);
   if (category) products = products.filter(p => p.category.toLowerCase() === category.toLowerCase());
   if (search) products = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
   if (on_sale === 'true') products = products.filter(p => p.discount > 0);
+  products = products.map(p => ({ ...p, price: markupPrice(p.price), mrp: p.mrp ? markupPrice(p.mrp) : p.mrp }));
+  res.json({ success: true, products, total: products.length });
+});
+
+// GET /api/shops/:shopId/products/mine — shop owner's own raw (base) prices for management
+// FIX: shop owner ko apna hi entered price dikhna chahiye (jo unhone type kiya),
+// commission-inclusive customer price nahi — warna edit form confusing lagta hai.
+router.get('/:shopId/products/mine', auth, requireRole('shopowner'), (req, res) => {
+  const shop = db.findById('shops', req.params.shopId);
+  if (!shop || shop.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Not authorized' });
+  const products = db.findAll('products').filter(p => p.shop_id === req.params.shopId);
   res.json({ success: true, products, total: products.length });
 });
 
