@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
+const { markupPrice, coinsEarnedForTotal, DELIVERY_CHARGE_RS, DELIVERY_PARTNER_PAYOUT_RS, FREE_DELIVERY_THRESHOLD_RS } = require('../middleware/pricing');
 
 // Haversine distance in km between two coordinates
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -50,6 +51,7 @@ function estimateDeliveryWindow(shopIds, custLat, custLng) {
 // COD order dono use karte hain — client ka number kabhi trust nahi karte.
 function computePricing(userId, items, coupon_code, custLat, custLng) {
   let subtotal = 0;
+  let totalShopPayout = 0;
   const enrichedItems = [];
   const MAX_DELIVERY_RADIUS_KM = 10;
 
@@ -72,12 +74,24 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
       }
     }
 
-    const itemTotal = product.price * item.qty;
+    // FIX: pehle jo price shop ne set kiya wahi customer se seedha liya jaata
+    // tha — platform ka koi commission hi track nahi hota tha. Ab shop ka base
+    // price (unka payout) alag hai, customer ko commission-inclusive price
+    // dikhta/bikta hai, aur order pe dono track hote hain settlement ke liye.
+    const unitCustomerPrice = markupPrice(product.price);
+    const itemTotal = unitCustomerPrice * item.qty;
+    const shopPayout = product.price * item.qty;
     subtotal += itemTotal;
-    enrichedItems.push({ product_id: item.product_id, shop_id: product.shop_id, qty: item.qty, price: product.price, total: itemTotal });
+    totalShopPayout += shopPayout;
+    enrichedItems.push({
+      product_id: item.product_id, shop_id: product.shop_id, qty: item.qty,
+      price: unitCustomerPrice,       // customer-facing unit price (commission included)
+      shop_unit_price: product.price, // shop ka apna base price (unka payout)
+      total: itemTotal, shop_payout: shopPayout
+    });
   }
 
-  const delivery_charge = subtotal >= 500 ? 0 : 30; // ₹30 customer se, ₹25 delivery boy ko, ₹5 platform; free above ₹500
+  const delivery_charge = subtotal >= FREE_DELIVERY_THRESHOLD_RS ? 0 : DELIVERY_CHARGE_RS;
 
   let discount = 0, coupon_used = null;
   if (coupon_code) {
@@ -93,7 +107,10 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
   }
 
   const total = subtotal + delivery_charge - discount;
-  return { subtotal, delivery_charge, discount, coupon_used, total, enrichedItems };
+  // Platform commission = item markup (subtotal - shop payout) + delivery margin (charge - partner payout)
+  const deliveryMargin = delivery_charge > 0 ? Math.max(0, delivery_charge - DELIVERY_PARTNER_PAYOUT_RS) : 0;
+  const platform_commission = (subtotal - totalShopPayout) + deliveryMargin;
+  return { subtotal, delivery_charge, discount, coupon_used, total, enrichedItems, shop_payout_total: totalShopPayout, platform_commission };
 }
 
 
@@ -258,12 +275,14 @@ router.post('/create-payment-intent', auth, requireRole('customer'), async (req,
       id: intentId,
       razorpay_order_id: rzpOrder.id,
       user_id: req.user.id,
-      items,
+      items: pricing.enrichedItems,
       coupon_code: pricing.coupon_used,
       subtotal: pricing.subtotal,
       delivery_charge: pricing.delivery_charge,
       discount: pricing.discount,
       total: pricing.total,
+      shop_payout_total: pricing.shop_payout_total,
+      platform_commission: pricing.platform_commission,
       used: false,
       created_at: new Date().toISOString()
     });
@@ -319,7 +338,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
         }
       }
 
-      pricing = { subtotal: intent.subtotal, delivery_charge: intent.delivery_charge, discount: intent.discount, total: intent.total, enrichedItems: intent.items };
+      pricing = { subtotal: intent.subtotal, delivery_charge: intent.delivery_charge, discount: intent.discount, total: intent.total, enrichedItems: intent.items, shop_payout_total: intent.shop_payout_total, platform_commission: intent.platform_commission };
       coupon_used_final = intent.coupon_code;
       db.updateById('payment_intents', intent.id, { used: true });
     } else {
@@ -329,14 +348,16 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       coupon_used_final = pricing.coupon_used;
     }
 
-    const { subtotal, delivery_charge, discount, total, enrichedItems } = pricing;
+    const { subtotal, delivery_charge, discount, total, enrichedItems, shop_payout_total, platform_commission } = pricing;
 
     if (coupon_used_final) {
       const coupon = db.findAll('coupons').find(c => c.code === coupon_used_final && c.active);
       if (coupon) db.updateById('coupons', coupon.id, { used: (coupon.used || 0) + 1 });
     }
 
-    const loyalty_earned = Math.floor(total / 10);
+    // FIX: pehle loyalty_earned = total/10 tha (bina kisi documented rate ke).
+    // Ab explicit 5% cashback hai, 100 ZepCoins = ₹1 ki dar se.
+    const loyalty_earned = coinsEarnedForTotal(total);
     const orderId = 'ord' + uuidv4().slice(0, 8);
     const orderShopIds = [...new Set(enrichedItems.map(i => i.shop_id))];
     const estimated_delivery = estimateDeliveryWindow(orderShopIds, lat, lng);
@@ -350,6 +371,8 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       razorpay_order_id: razorpay_order_id || null,
       razorpay_payment_id: razorpay_payment_id || null,
       delivery_partner_id: null, // Koi assign nahi — delivery wale khud accept karenge
+      delivery_partner_payout: DELIVERY_PARTNER_PAYOUT_RS, // partner ko hamesha milta hai, chahe customer ko free delivery mili ho
+      shop_payout_total, platform_commission, // settlement/accounting ke liye
       estimated_delivery,
       created_at: new Date().toISOString()
     };
@@ -477,8 +500,8 @@ router.put('/:id/status', auth, (req, res) => {
       const dp = db.findOne('delivery_partners', { user_id: order.delivery_partner_id });
       if (dp) {
         db.increment('delivery_partners', dp.id, 'total_deliveries', 1);
-        db.increment('delivery_partners', dp.id, 'total_earnings', 25);
-        db.increment('users', order.delivery_partner_id, 'loyalty_points', 25);
+        db.increment('delivery_partners', dp.id, 'total_earnings', DELIVERY_PARTNER_PAYOUT_RS);
+        db.increment('users', order.delivery_partner_id, 'loyalty_points', DELIVERY_PARTNER_PAYOUT_RS);
       }
     }
 
