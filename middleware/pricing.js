@@ -20,6 +20,12 @@
 //   partner payout   = 15 + 3*6 = ₹33
 //   ₹100 ka item -> customer ko ₹105 dikhega. + ₹44 delivery = ₹149 total.
 //   Shop payout: ₹100. Delivery partner: ₹33. Platform: ₹5 (item) + ₹11 (delivery) = ₹16.
+//
+// Agar distance hi pata na ho (coords missing), toh koi extra km assume nahi
+// karte — bas base charge hi lagta hai (customer ₹20, partner ₹15). Isse
+// customer ko hamesha ek predictable "starting from ₹20" dikhta hai, aur
+// jaise hi real distance pata chalta hai (checkout ke time), usi hisaab se
+// upar badhta hai.
 
 const ITEM_COMMISSION_PCT = 5;       // shop ke base price par platform commission
 
@@ -29,7 +35,7 @@ const DELIVERY_BASE_CHARGE_RS = 20;      // customer se base charge (pehle 2km k
 const DELIVERY_PER_KM_RS = 8;            // base ke baad customer se har extra km ka charge
 const DELIVERY_PARTNER_BASE_PAYOUT_RS = 15; // delivery partner ka base payout (pehle 2km)
 const DELIVERY_PARTNER_PER_KM_RS = 6;       // partner ko base ke baad har extra km ka
-const DEFAULT_DELIVERY_DISTANCE_KM = 3;  // jab shop/customer coords available na ho, tab fallback distance
+const DEFAULT_DELIVERY_DISTANCE_KM = 2;  // jab shop/customer coords available na ho, tab fallback sirf base charge (koi extra km assume nahi karte)
 
 const FREE_DELIVERY_THRESHOLD_RS = 500; // ispar customer se delivery charge nahi liya jaata, platform khud us charge ko absorb karta hai (partner ka payout phir bhi distance-based hi milta hai)
 
