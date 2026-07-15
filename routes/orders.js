@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
-const { markupPrice, coinsEarnedForTotal, DELIVERY_CHARGE_RS, DELIVERY_PARTNER_PAYOUT_RS, FREE_DELIVERY_THRESHOLD_RS } = require('../middleware/pricing');
+const { markupPrice, coinsEarnedForTotal, calcDeliveryCharge, calcPartnerPayout, FREE_DELIVERY_THRESHOLD_RS } = require('../middleware/pricing');
 
 // Haversine distance in km between two coordinates
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -54,6 +54,7 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
   let totalShopPayout = 0;
   const enrichedItems = [];
   const MAX_DELIVERY_RADIUS_KM = 10;
+  let maxShopDistKm = null; // farthest involved shop se customer tak — delivery charge/payout isi se derive hote hain
 
   for (const item of items) {
     const product = db.findById('products', item.product_id);
@@ -72,6 +73,10 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
       if (dist > MAX_DELIVERY_RADIUS_KM) {
         return { error: `${shop.name} aapki delivery range (${MAX_DELIVERY_RADIUS_KM}km) se bahar hai — ${dist.toFixed(1)}km door hai` };
       }
+      // Delivery charge/payout farthest shop ki distance se calculate hoti hai
+      // (order mein multiple shops ho sakti hain, delivery partner ko sabse
+      // door wali pickup tak jaana padega).
+      if (maxShopDistKm === null || dist > maxShopDistKm) maxShopDistKm = dist;
     }
 
     // FIX: pehle jo price shop ne set kiya wahi customer se seedha liya jaata
@@ -91,7 +96,13 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
     });
   }
 
-  const delivery_charge = subtotal >= FREE_DELIVERY_THRESHOLD_RS ? 0 : DELIVERY_CHARGE_RS;
+  // Distance-based delivery charge (Blinkit/Zomato jaisa) — fix ₹X nahi, jitni
+  // door delivery utna zyada charge. Partner payout bhi isi distance se
+  // derive hota hai, chahe customer ko free-delivery threshold ki wajah se
+  // charge na lage — partner ko uska poora distance-based payout milta hai.
+  const delivery_distance_km = maxShopDistKm;
+  const delivery_partner_payout = calcPartnerPayout(delivery_distance_km);
+  const delivery_charge = subtotal >= FREE_DELIVERY_THRESHOLD_RS ? 0 : calcDeliveryCharge(delivery_distance_km);
 
   let discount = 0, coupon_used = null;
   if (coupon_code) {
@@ -107,10 +118,12 @@ function computePricing(userId, items, coupon_code, custLat, custLng) {
   }
 
   const total = subtotal + delivery_charge - discount;
-  // Platform commission = item markup (subtotal - shop payout) + delivery margin (charge - partner payout)
-  const deliveryMargin = delivery_charge > 0 ? Math.max(0, delivery_charge - DELIVERY_PARTNER_PAYOUT_RS) : 0;
+  // Platform commission = item markup (subtotal - shop payout) + delivery margin (charge - partner payout).
+  // Agar delivery free thi (customer se ₹0 liya), margin negative hoga — platform
+  // ne apni jeb se partner ka payout diya, isliye commission mein wo ghata bhi dikhta hai.
+  const deliveryMargin = delivery_charge > 0 ? (delivery_charge - delivery_partner_payout) : -delivery_partner_payout;
   const platform_commission = (subtotal - totalShopPayout) + deliveryMargin;
-  return { subtotal, delivery_charge, discount, coupon_used, total, enrichedItems, shop_payout_total: totalShopPayout, platform_commission };
+  return { subtotal, delivery_charge, delivery_partner_payout, delivery_distance_km, discount, coupon_used, total, enrichedItems, shop_payout_total: totalShopPayout, platform_commission };
 }
 
 
@@ -279,6 +292,7 @@ router.post('/create-payment-intent', auth, requireRole('customer'), async (req,
       coupon_code: pricing.coupon_used,
       subtotal: pricing.subtotal,
       delivery_charge: pricing.delivery_charge,
+      delivery_partner_payout: pricing.delivery_partner_payout,
       discount: pricing.discount,
       total: pricing.total,
       shop_payout_total: pricing.shop_payout_total,
@@ -338,7 +352,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
         }
       }
 
-      pricing = { subtotal: intent.subtotal, delivery_charge: intent.delivery_charge, discount: intent.discount, total: intent.total, enrichedItems: intent.items, shop_payout_total: intent.shop_payout_total, platform_commission: intent.platform_commission };
+      pricing = { subtotal: intent.subtotal, delivery_charge: intent.delivery_charge, delivery_partner_payout: intent.delivery_partner_payout, discount: intent.discount, total: intent.total, enrichedItems: intent.items, shop_payout_total: intent.shop_payout_total, platform_commission: intent.platform_commission };
       coupon_used_final = intent.coupon_code;
       db.updateById('payment_intents', intent.id, { used: true });
     } else {
@@ -348,7 +362,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       coupon_used_final = pricing.coupon_used;
     }
 
-    const { subtotal, delivery_charge, discount, total, enrichedItems, shop_payout_total, platform_commission } = pricing;
+    const { subtotal, delivery_charge, delivery_partner_payout, discount, total, enrichedItems, shop_payout_total, platform_commission } = pricing;
 
     if (coupon_used_final) {
       const coupon = db.findAll('coupons').find(c => c.code === coupon_used_final && c.active);
@@ -371,7 +385,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       razorpay_order_id: razorpay_order_id || null,
       razorpay_payment_id: razorpay_payment_id || null,
       delivery_partner_id: null, // Koi assign nahi — delivery wale khud accept karenge
-      delivery_partner_payout: DELIVERY_PARTNER_PAYOUT_RS, // partner ko hamesha milta hai, chahe customer ko free delivery mili ho
+      delivery_partner_payout: delivery_partner_payout ?? calcPartnerPayout(null), // distance-based; partner ko hamesha milta hai, chahe customer ko free delivery mili ho
       shop_payout_total, platform_commission, // settlement/accounting ke liye
       estimated_delivery,
       created_at: new Date().toISOString()
@@ -499,9 +513,13 @@ router.put('/:id/status', auth, (req, res) => {
     if (status === 'delivered' && order.delivery_partner_id) {
       const dp = db.findOne('delivery_partners', { user_id: order.delivery_partner_id });
       if (dp) {
+        // FIX: pehle har delivery ka payout fix DELIVERY_PARTNER_PAYOUT_RS tha.
+        // Ab payout distance-based hai aur order banate waqt hi order.delivery_partner_payout
+        // mein save ho chuka hota hai — wahi is order ki sach much ki earning hai.
+        const payout = order.delivery_partner_payout ?? calcPartnerPayout(null);
         db.increment('delivery_partners', dp.id, 'total_deliveries', 1);
-        db.increment('delivery_partners', dp.id, 'total_earnings', DELIVERY_PARTNER_PAYOUT_RS);
-        db.increment('users', order.delivery_partner_id, 'loyalty_points', DELIVERY_PARTNER_PAYOUT_RS);
+        db.increment('delivery_partners', dp.id, 'total_earnings', payout);
+        db.increment('users', order.delivery_partner_id, 'loyalty_points', payout);
       }
     }
 
