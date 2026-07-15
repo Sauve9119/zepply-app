@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth } = require('../middleware/auth');
+const { ZEPCOIN_TO_RUPEE, ZEPCOIN_EARN_PCT, coinsToRupees } = require('../middleware/pricing');
 
 // GET /api/loyalty/balance
 router.get('/balance', auth, (req, res) => {
@@ -20,6 +21,11 @@ router.get('/balance', auth, (req, res) => {
   res.json({
     success: true,
     points: user.loyalty_points || 0,
+    // FIX: pehle coins ki rupee value kahin bhi explicit nahi thi. Ab clearly
+    // batate hain: 100 ZepCoins = ₹1, aur har order pe 5% cashback milta hai.
+    value_rupees: coinsToRupees(user.loyalty_points || 0),
+    conversion_rate: `${ZEPCOIN_TO_RUPEE} ZepCoins = ₹1`,
+    earn_rate_pct: ZEPCOIN_EARN_PCT,
     tier: user.tier || 'bronze',
     next_tier: nextTier || null,
     points_to_next_tier: nextTierPts ? Math.max(0, nextTierPts - user.loyalty_points) : 0,
