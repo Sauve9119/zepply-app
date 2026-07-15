@@ -13,9 +13,14 @@ router.put('/notifications/mark-all-read', auth, (req, res) => { db.updateMany('
 
 router.post('/reviews', auth, (req, res) => {
   try {
-    const { order_id, shop_id, rating, comment, tags = [], review_type = 'text' } = req.body;
+    const { order_id, shop_id, rating, comment, tags = [], review_type = 'text', delivery_rating, delivery_comment } = req.body;
     if (!order_id || !shop_id || !rating) return res.status(400).json({ success: false, message: 'order_id, shop_id aur rating required hai' });
     if (rating < 1 || rating > 5) return res.status(400).json({ success: false, message: 'Rating 1 se 5 ke beech honi chahiye' });
+    // FIX: pehle sirf shop ki rating li jaati thi — delivery partner ko kabhi
+    // rate hi nahi kiya ja sakta tha. Ab dono ek hi review submission mein
+    // saath rate ho sakte hain.
+    if (delivery_rating != null && (delivery_rating < 1 || delivery_rating > 5))
+      return res.status(400).json({ success: false, message: 'Delivery rating 1 se 5 ke beech honi chahiye' });
 
     // FIX: Check karo ki ye order is customer ka hai
     const order = db.findById('orders', order_id);
@@ -26,12 +31,28 @@ router.post('/reviews', auth, (req, res) => {
     const existing = db.find('reviews', { order_id, user_id: req.user.id });
     if (existing.length) return res.status(409).json({ success: false, message: 'Is order ka review pehle de chuke hain' });
 
-    const review = { id: 'rev' + uuidv4().slice(0, 8), user_id: req.user.id, order_id, shop_id, rating: parseInt(rating), comment: comment || '', tags, review_type, created_at: new Date().toISOString() };
+    const review = {
+      id: 'rev' + uuidv4().slice(0, 8), user_id: req.user.id, order_id, shop_id,
+      rating: parseInt(rating), comment: comment || '', tags, review_type,
+      delivery_partner_id: order.delivery_partner_id || null,
+      delivery_rating: delivery_rating != null ? parseInt(delivery_rating) : null,
+      delivery_comment: delivery_comment || '',
+      created_at: new Date().toISOString()
+    };
     db.insert('reviews', review);
 
     const shopReviews = db.find('reviews', { shop_id });
     const avgRating = (shopReviews.reduce((s, r) => s + r.rating, 0) / shopReviews.length).toFixed(1);
     db.updateById('shops', shop_id, { rating: parseFloat(avgRating), total_reviews: shopReviews.length });
+
+    if (review.delivery_partner_id && review.delivery_rating != null) {
+      const dp = db.findOne('delivery_partners', { user_id: review.delivery_partner_id });
+      if (dp) {
+        const dpReviews = db.findAll('reviews').filter(r => r.delivery_partner_id === review.delivery_partner_id && r.delivery_rating != null);
+        const avgDpRating = (dpReviews.reduce((s, r) => s + r.delivery_rating, 0) / dpReviews.length).toFixed(1);
+        db.updateById('delivery_partners', dp.id, { rating: parseFloat(avgDpRating), total_ratings: dpReviews.length });
+      }
+    }
 
     const pts = { text: 25, photo: 50, video: 100 }[review_type] || 25;
     db.increment('users', req.user.id, 'loyalty_points', pts);
