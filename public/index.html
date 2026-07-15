@@ -313,7 +313,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
     <button onclick="enterApp('customer')" style="background:#FFF7ED;border:2px solid #F97316;border-radius:18px;padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.9rem;cursor:pointer;text-align:left;transition:all .15s;-webkit-tap-highlight-color:transparent;" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform='scale(1)'">
       <div style="width:52px;height:52px;background:#F97316;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.7rem;flex-shrink:0">🛒</div>
       <div style="flex:1">
-        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Order Karo</div>
+        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Customer</div>
         <div style="color:#888;font-size:.76rem;margin-top:3px">Grocery · Sabzi · Hardware</div>
       </div>
       <div style="color:#F97316;font-size:1.3rem;font-weight:700">›</div>
@@ -322,7 +322,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
     <button onclick="enterApp('shopowner')" style="background:#F0FDF4;border:2px solid #16A34A;border-radius:18px;padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.9rem;cursor:pointer;text-align:left;transition:all .15s;-webkit-tap-highlight-color:transparent;" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform='scale(1)'">
       <div style="width:52px;height:52px;background:#16A34A;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.7rem;flex-shrink:0">🏪</div>
       <div style="flex:1">
-        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Apni Dukaan</div>
+        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Shop Owner</div>
         <div style="color:#888;font-size:.76rem;margin-top:3px">List karo · Orders pao</div>
       </div>
       <div style="color:#16A34A;font-size:1.3rem;font-weight:700">›</div>
@@ -331,8 +331,8 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
     <button onclick="enterApp('delivery')" style="background:#F5F3FF;border:2px solid #7C3AED;border-radius:18px;padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.9rem;cursor:pointer;text-align:left;transition:all .15s;-webkit-tap-highlight-color:transparent;" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform='scale(1)'">
       <div style="width:52px;height:52px;background:#7C3AED;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.7rem;flex-shrink:0">🏍️</div>
       <div style="flex:1">
-        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Delivery Karo</div>
-        <div style="color:#888;font-size:.76rem;margin-top:3px">₹25/delivery · Roz kamai</div>
+        <div style="color:#1C1C1C;font-size:1.05rem;font-weight:800">Delivery Boy</div>
+        <div style="color:#888;font-size:.76rem;margin-top:3px">Distance ke hisaab se · Roz kamai</div>
       </div>
       <div style="color:#7C3AED;font-size:1.3rem;font-weight:700">›</div>
     </button>
@@ -912,16 +912,35 @@ home: async () => {
     // isliye hamesha broad administrative naam (jaise "Jaipur Municipal
     // Corporation") dikhta tha, asli sadak/locality (jaise "Agra Road") nahi.
     // Ab zoom=18 (max detail) hai aur road ko priority mein rakha hai.
+    //
+    // FIX 2: kai jagah Nominatim `road`/`suburb` field khaali deta hai (address
+    // point directly kisi tagged street se link nahi hota) — tab pehle wala
+    // code seedha `city_district` pe gir jaata tha, jo aksar generic admin naam
+    // hota hai (e.g. "Jaipur Municipal Corporation"). Ab agar structured fields
+    // khaali hain, `display_name` (jo hamesha specific → general order mein
+    // hota hai) ke pehle non-generic parts use karte hain, taaki asli sadak/
+    // area ka naam mile na ki sirf municipal corporation jaisa boilerplate.
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${myCoords.lat}&lon=${myCoords.lng}&zoom=18&addressdetails=1`)
       .then(r => r.json())
       .then(data => {
         const a = data.address || {};
-        const locality = a.suburb || a.neighbourhood || a.village || a.hamlet || '';
-        const roadName = a.road || a.pedestrian || '';
+        const isGeneric = s => !s || /municipal corporation|tehsil|district|division|taluk|mandal|zone/i.test(s);
+        const roadName = a.road || a.pedestrian || a.residential || '';
+        const locality = a.suburb || a.neighbourhood || a.quarter || a.village || a.hamlet || '';
         const cityName = a.city || a.town || a.state_district || '';
-        // Priority: "Road, Locality" agar dono mil jaye, warna jo mile
-        const primary = [roadName, locality].filter(Boolean).join(', ') || a.city_district || cityName || 'Current Location';
-        const shortAddr = primary === cityName ? primary : [primary, cityName].filter((v,i,arr)=>v && arr.indexOf(v)===i).join(', ');
+        let primary = [roadName, locality].filter(Boolean).join(', ');
+        if (!primary) {
+          // display_name Nominatim mein hamesha specific -> general order mein
+          // aata hai (e.g. "Agra Road, Sanganer, Jaipur, Rajasthan, India") —
+          // isme se generic admin-boilerplate parts hata ke pehle 2 specific
+          // parts utha lete hain.
+          const parts = (data.display_name || '').split(',').map(p => p.trim()).filter(Boolean);
+          primary = parts.filter(p => !isGeneric(p)).slice(0, 2).join(', ');
+        }
+        if (!primary && !isGeneric(a.city_district)) primary = a.city_district;
+        const shortAddr = (primary && primary !== cityName)
+          ? [primary, cityName].filter((v, i, arr) => v && arr.indexOf(v) === i).join(', ')
+          : (primary || cityName || 'Current Location');
         if (lbl) lbl.textContent = '📍 ' + (shortAddr || 'Current Location');
         window._detectedAddress = data.display_name || shortAddr;
         const addrField = document.getElementById('delivery-address');
@@ -1516,6 +1535,40 @@ function updateCtrl(id) {
 }
 function getTotal() { return Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0); }
 function getCount() { return Object.values(cart).reduce((s, i) => s + i.qty, 0); }
+
+// FIX: pehle cart preview mein delivery fee hamesha fix ₹30 dikhta tha
+// (sub >= 500 ? 0 : 30) — jabki asli charge ab distance-based hai (server
+// isi tarah calculate karta hai, middleware/pricing.js dekho). Ye constants
+// wahi values hain, taaki cart mein jo estimate dikhe wo checkout ke waqt
+// server jo actual charge lagayega usse match kare. Server hi final source
+// of truth hai — ye sirf UI preview ke liye hai.
+const DELIVERY_BASE_KM = 2, DELIVERY_BASE_CHARGE_RS = 20, DELIVERY_PER_KM_RS = 8, DEFAULT_DELIVERY_DISTANCE_KM = 3;
+function haversineKmGlobal(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+// Cart mein involved shops ki (customer se sabse door wali) distance nikal ke
+// distance-based delivery charge estimate deta hai. Coords/shop data missing
+// ho toh ek sensible default distance use karta hai (server bhi yehi karta hai).
+function estimateCartDeliveryCharge() {
+  const myLat = window._myCoords?.lat, myLng = window._myCoords?.lng;
+  const shopIds = [...new Set(Object.values(cart).map(i => i.shopId))];
+  let maxDist = null;
+  if (myLat != null && myLng != null) {
+    const shops = window._cachedShops || [];
+    shopIds.forEach(id => {
+      const shop = shops.find(s => s.id === id);
+      if (shop && typeof shop.lat === 'number' && typeof shop.lng === 'number' && shop.lat !== 0 && shop.lng !== 0) {
+        const d = haversineKmGlobal(shop.lat, shop.lng, myLat, myLng);
+        if (maxDist === null || d > maxDist) maxDist = d;
+      }
+    });
+  }
+  const d = (maxDist != null) ? maxDist : DEFAULT_DELIVERY_DISTANCE_KM;
+  const extraKm = Math.max(0, Math.ceil(d - DELIVERY_BASE_KM));
+  return DELIVERY_BASE_CHARGE_RS + extraKm * DELIVERY_PER_KM_RS;
+}
 function updateCF() {
   const c = getCount(), t = getTotal();
   const stores = new Set(Object.values(cart).map(i => i.shopId)).size;
@@ -1554,7 +1607,7 @@ async function openCart() {
         <span class="fw7 tsm" style="min-width:44px;text-align:right">₹${i.price * i.qty}</span>
       </div></div>`).join('')}
     </div>`).join('<div class="div"></div>');
-  const sub = getTotal(), del = sub >= 500 ? 0 : 30;
+  const sub = getTotal(), del = sub >= 500 ? 0 : estimateCartDeliveryCharge();
   let disc = 0, discHtml = '';
   if (couponApplied && sub >= couponApplied.min) {
     disc = couponApplied.type === 'flat' ? couponApplied.value : Math.floor(sub * couponApplied.value / 100);
