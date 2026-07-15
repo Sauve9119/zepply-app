@@ -85,11 +85,22 @@ router.get('/analytics/shop/:shopId', auth, requireRole('shopowner'), (req, res)
   const allOrders = db.findAll('orders');
   const shopOrders = allOrders.filter(o => o.items && o.items.some(i => i.shop_id === req.params.shopId));
   const deliveredOrders = shopOrders.filter(o => o.status === 'delivered');
-  const totalRevenue = deliveredOrders.reduce((s, o) => s + (o.items || []).filter(i => i.shop_id === req.params.shopId).reduce((ss, i) => ss + i.price * i.qty, 0), 0);
+  // FIX: pehle revenue `i.price` (customer-facing, commission-inclusive price,
+  // e.g. ₹105) se calculate hoti thi — shop ko dikhta tha ki unhone ₹105 kamaya,
+  // jabki unka actual payout ₹100 hi hai (baaki ₹5 platform commission hai).
+  // Ab har jagah `i.shop_payout` (shop ka apna base price × qty) use karte hain.
+  const totalRevenue = deliveredOrders.reduce((s, o) => s + (o.items || []).filter(i => i.shop_id === req.params.shopId).reduce((ss, i) => ss + (i.shop_payout ?? i.price * i.qty), 0), 0);
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().split('T')[0]; }).reverse();
-  const revenueByDay = days.map(day => { const dayOrders = deliveredOrders.filter(o => o.delivered_at && o.delivered_at.startsWith(day)); return { date: day, revenue: dayOrders.reduce((s, o) => s + (o.total || 0), 0), orders: dayOrders.length }; });
+  // FIX: pehle din-wise revenue `o.total` (poora order total — dusri shops ke
+  // items, delivery charge, commission sab included) se banti thi, chahe order
+  // mein multiple shops ho. Ab sirf isi shop ke items ka shop_payout sum hota hai.
+  const revenueByDay = days.map(day => {
+    const dayOrders = deliveredOrders.filter(o => o.delivered_at && o.delivered_at.startsWith(day));
+    const revenue = dayOrders.reduce((s, o) => s + (o.items || []).filter(i => i.shop_id === req.params.shopId).reduce((ss, i) => ss + (i.shop_payout ?? i.price * i.qty), 0), 0);
+    return { date: day, revenue, orders: dayOrders.length };
+  });
   const productSales = {};
-  deliveredOrders.forEach(o => { (o.items || []).filter(i => i.shop_id === req.params.shopId).forEach(i => { if (!productSales[i.product_id]) productSales[i.product_id] = { qty: 0, revenue: 0 }; productSales[i.product_id].qty += i.qty; productSales[i.product_id].revenue += i.price * i.qty; }); });
+  deliveredOrders.forEach(o => { (o.items || []).filter(i => i.shop_id === req.params.shopId).forEach(i => { if (!productSales[i.product_id]) productSales[i.product_id] = { qty: 0, revenue: 0 }; productSales[i.product_id].qty += i.qty; productSales[i.product_id].revenue += (i.shop_payout ?? i.price * i.qty); }); });
   const topProducts = Object.entries(productSales).sort(([, a], [, b]) => b.revenue - a.revenue).slice(0, 5).map(([pid, stats]) => { const p = db.findById('products', pid); return { name: p?.name, emoji: p?.emoji, ...stats }; });
   res.json({ success: true, analytics: { total_orders: shopOrders.length, delivered_orders: deliveredOrders.length, total_revenue: totalRevenue, avg_order_value: deliveredOrders.length ? Math.round(totalRevenue / deliveredOrders.length) : 0, rating: shop.rating, total_reviews: shop.total_reviews, revenue_by_day: revenueByDay, top_products: topProducts } });
 });
