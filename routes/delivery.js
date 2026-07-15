@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
+const { DELIVERY_PARTNER_PAYOUT_RS } = require('../middleware/pricing');
 
 // GET /api/delivery/profile
 router.get('/profile', auth, requireRole('delivery'), (req, res) => {
@@ -77,7 +78,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   // Collect drops
   const drops = orders.map(o => {
     const user = db.findById('users', o.user_id);
-    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: 25 };
+    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: DELIVERY_PARTNER_PAYOUT_RS };
   });
 
   // Simple TSP: sort pickups by proximity to current location, then drops
@@ -85,7 +86,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const allStops = [...pickups, ...drops];
   const totalDist = (allStops.length * 0.6).toFixed(1);
   const totalTime = Math.ceil(allStops.length * 5) + ' min';
-  const totalEarning = drops.length * 25;
+  const totalEarning = drops.length * DELIVERY_PARTNER_PAYOUT_RS;
 
   res.json({
     success: true,
@@ -116,7 +117,7 @@ router.get('/earnings', auth, requireRole('delivery'), (req, res) => {
   weekStart.setDate(weekStart.getDate() - 7);
 
   const earnings = {
-    today: { deliveries: todayOrders.length, base: todayOrders.length * 25, bonus: 0, tips: 0, total: todayOrders.length * 25 },
+    today: { deliveries: todayOrders.length, base: todayOrders.length * DELIVERY_PARTNER_PAYOUT_RS, bonus: 0, tips: 0, total: todayOrders.length * DELIVERY_PARTNER_PAYOUT_RS },
     month: { deliveries: dp.total_deliveries, total: dp.total_earnings, avg_per_delivery: dp.total_deliveries > 0 ? Math.round(dp.total_earnings / dp.total_deliveries) : 0 },
     daily_target: { target: 20, current: todayOrders.length, bonus_on_completion: 200 },
     rating: dp.rating || 0,
