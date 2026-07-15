@@ -83,7 +83,7 @@
       "@type": "FAQPage",
       "mainEntity": [
         {"@type": "Question","name": "Qdoor kya hai?","acceptedAnswer": {"@type": "Answer","text": "Qdoor ek hyperlocal delivery app hai jo aapke local shops se Grocery, Sabzi, Hardware aur Stationery ghar pe fast deliver karta hai."}},
-        {"@type": "Question","name": "Delivery charge kitna hai?","acceptedAnswer": {"@type": "Answer","text": "₹500 se upar ke orders par Free Delivery. ₹500 se kam par sirf ₹30 delivery charge lagta hai."}},
+        {"@type": "Question","name": "Delivery charge kitna hai?","acceptedAnswer": {"@type": "Answer","text": "₹500 se upar ke orders par Free Delivery. Usse kam order par delivery charge distance ke hisaab se lagta hai — pehle 2km ke liye ₹20, uske baad har extra km ka ₹8."}},
         {"@type": "Question","name": "Kya Qdoor Jaipur mein available hai?","acceptedAnswer": {"@type": "Answer","text": "Haan! Qdoor abhi Jaipur mein available hai aur jaldi aur cities mein expand hoga."}},
         {"@type": "Question","name": "Kya main shop owner bhi ban sakta hun?","acceptedAnswer": {"@type": "Answer","text": "Bilkul! Qdoor par apni shop list karo aur lakho customers tak pahuncho bina kisi commission ke."}}
       ]
@@ -348,7 +348,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   <!-- Hidden SEO -->
   <div style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0" aria-hidden="false">
     <h1>Qdoor - Fast Delivery App Jaipur</h1>
-    <p>Qdoor se Grocery, Sabzi, Dal, Atta, Chawal, Hardware, Stationery, Davaiya jaldi ghar pe order karo. Jaipur ke local dukaan se seedha delivery. Free delivery ₹500 se upar. Shop owner apni dukaan online list kar sakte hain. Delivery partner ban ke ₹25 per delivery kamao. Best hyperlocal delivery app in Jaipur Rajasthan India.</p>
+    <p>Qdoor se Grocery, Sabzi, Dal, Atta, Chawal, Hardware, Stationery, Davaiya jaldi ghar pe order karo. Jaipur ke local dukaan se seedha delivery. Free delivery ₹500 se upar. Shop owner apni dukaan online list kar sakte hain. Delivery partner ban ke distance ke hisaab se per delivery kamao. Best hyperlocal delivery app in Jaipur Rajasthan India.</p>
   </div>
 </div>
 
@@ -963,12 +963,6 @@ home: async () => {
     </div>
     <div style="margin-left:auto;background:var(--p);color:#fff;padding:.3rem .75rem;border-radius:20px;font-size:.72rem;font-weight:700">${shops.length} shops</div>
   </div>
-  <!-- Product / Store mode toggle -->
-  <div style="display:flex;background:var(--s3);border-radius:10px;padding:3px;margin-bottom:.85rem;gap:3px">
-    <button id="mode-products" onclick="setHomeMode('products')" style="flex:1;border:none;padding:.5rem;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;background:var(--p);color:#fff;transition:all .15s">🛍️ Products</button>
-    <button id="mode-stores" onclick="setHomeMode('stores')" style="flex:1;border:none;padding:.5rem;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;background:transparent;color:var(--t2);transition:all .15s">🏪 Stores</button>
-  </div>
-
   <!-- Categories -->
   <div class="cscroll">
     ${cats.map(c=>`<div class="cp" onclick="filterCat(this,'${c.c}')"><span class="ce">${c.e}</span><span class="cl">${c.l}</span></div>`).join('')}
@@ -988,7 +982,7 @@ home: async () => {
   <div id="stores-list">
     ${shops.length === 0 ?
       '<div class="card" style="text-align:center;padding:2rem"><div style="font-size:3rem">🏪</div><div class="fw7 mt1">Aapke area mein abhi koi shop nahi</div><div class="tsm tm mt1">Jald hi shops add hongi</div></div>' :
-      renderStoreListHTML(_homeMode, shops, allProds)
+      renderStoreListHTML('products', shops, allProds)
     }
   </div>
   `;
@@ -1356,13 +1350,13 @@ dlhome: async () => {
       <div style="font-size:.75rem;opacity:.8">Today's Earnings</div>
       <div style="font-size:1.7rem;font-weight:800">₹${(e.today?.total||0).toLocaleString()}</div>
       <div class="fl g2 mt1" style="font-size:.75rem;opacity:.85">
-        <span>📦 ${e.today?.deliveries||0} deliveries</span><span>⭐ ${e.rating>0?e.rating:'New'} rating</span><span>💰 ₹25/delivery (customer pays ₹30)</span>
+        <span>📦 ${e.today?.deliveries||0} deliveries</span><span>⭐ ${e.rating>0?e.rating:'New'} rating</span><span>💰 Distance ke hisaab se payout (₹15+ base)</span>
       </div>
     </div>
     <div class="g4c">
       <div class="sb"><div class="sv">${e.today?.deliveries||0}</div><div class="sl">Today</div></div>
       <div class="sb"><div class="sv">${e.rating||0}⭐</div><div class="sl">Rating</div></div>
-      <div class="sb"><div class="sv">₹25</div><div class="sl">Per Del</div></div>
+      <div class="sb"><div class="sv">₹${e.today?.deliveries ? Math.round((e.today.total||0)/e.today.deliveries) : 15}</div><div class="sl">Avg/Del</div></div>
       <div class="sb"><div class="sv">${available.length}</div><div class="sl">Available</div></div>
     </div>
     <div class="fl g1 mt1 mb2">
@@ -1411,7 +1405,7 @@ earns: async () => {
     <div class="ec" style="text-align:center">
       <div style="font-size:.75rem;opacity:.8">This Month Total</div>
       <div style="font-size:1.9rem;font-weight:800">₹${(e.month?.total||0).toLocaleString()}</div>
-      <div style="font-size:.75rem;opacity:.8;margin-top:.2rem">₹25/delivery (customer pays ₹30) · ${e.month?.deliveries||0} deliveries</div>
+      <div style="font-size:.75rem;opacity:.8;margin-top:.2rem">Distance ke hisaab se payout · ${e.month?.deliveries||0} deliveries</div>
     </div>
     <div class="g4c">
       <div class="sb"><div class="sv">${e.month?.deliveries||0}</div><div class="sl">Deliveries</div></div>
@@ -1475,7 +1469,7 @@ function renderShopCard(store, prods = []) {
       <div style="flex:1">
         <div class="sn">${store.name}</div>
         <div class="sm">${store.rating>0?'⭐'+store.rating+' · ':''}${store.delivery_time||'20-30 min'} · ${prods.length} items</div>
-        ${store.min_order?'<div class="txs tt">Min ₹'+store.min_order+' · Delivery ₹'+(store.delivery_charge||0)+'</div>':''}
+        ${store.min_order?'<div class="txs tt">Min ₹'+store.min_order+' · Delivery: distance ke hisaab se</div>':''}
       </div>
       <div class="fl g1 ic">${openTag}</div>
     </div>
@@ -1696,20 +1690,13 @@ let _homeMode = 'products';
 // HTML banate the — isliye "Product" mode select karne pe bhi kabhi products
 // nahi dikhte the. Ab sab jagah yehi ek function use hota hai, taaki teeno
 // jagah (initial load, toggle click, category filter) hamesha sync mein rahein.
+//
+// UPDATE: customer dashboard se separate "Stores" category hata di gayi hai —
+// ab sirf ek hi unified "Products" view hai. Product search karne pe wahi
+// product jitni bhi dukano pe available hai, sab alag price ke saath ek saath
+// dikhta hai (koi extra "stores" tab select karne ki zaroorat nahi).
 function renderStoreListHTML(mode, shops, allProds) {
-  if (mode === 'stores') {
-    return shops.length ? shops.map(s => `
-      <div class="card" style="display:flex;align-items:center;gap:.85rem;cursor:pointer" onclick="openStoreProducts('${s.id}','${s.name.replace(/'/g,'')}')" >
-        <div style="width:52px;height:52px;background:var(--pl);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${s.emoji||'🏪'}</div>
-        <div style="flex:1">
-          <div style="font-weight:800;font-size:.92rem">${s.name}</div>
-          <div style="font-size:.72rem;color:var(--t2);margin-top:2px">${s.category} · ${s.distance_km||'~0.5'}km · ⭐${s.rating||'New'}</div>
-          <div style="font-size:.7rem;color:var(--t3);margin-top:2px">${s.address||''}</div>
-        </div>
-        <div style="color:var(--p);font-size:1.2rem">›</div>
-      </div>`).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi store nahi mila</div>';
-  }
-  // Product mode: flat product-first grid, dukaan ka naam chota sa side mein
+  // Product-first grid, dukaan ka naam chota sa side mein
   const shopById = {};
   shops.forEach(s => shopById[s.id] = s);
   const visibleProds = allProds.filter(p => shopById[p.shop_id]); // sirf nearby shops ke products
@@ -1731,40 +1718,7 @@ function renderStoreListHTML(mode, shops, allProds) {
     </div>`;
   }).join('') + `</div>`;
 }
-function setHomeMode(mode) {
-  _homeMode = mode;
-  const pb = document.getElementById('mode-products');
-  const sb = document.getElementById('mode-stores');
-  if (pb && sb) {
-    pb.style.background = mode==='products' ? 'var(--p)' : 'transparent';
-    pb.style.color = mode==='products' ? '#fff' : 'var(--t2)';
-    sb.style.background = mode==='stores' ? 'var(--p)' : 'transparent';
-    sb.style.color = mode==='stores' ? '#fff' : 'var(--t2)';
-  }
-  const sl = document.getElementById('stores-list');
-  if (!sl) return;
-  sl.innerHTML = renderStoreListHTML(mode, window._cachedShops || [], window._cachedProds || []);
-}
 
-async function openStoreProducts(shopId, shopName) {
-  const sl = document.getElementById('stores-list');
-  const shops = window._cachedShops || [];
-  const shop = shops.find(s => s.id === shopId);
-  // FIX: pehle yahan hamesha fresh API call hoti thi aur turant "Loading..."
-  // dikha ke poora content clear ho jaata tha — chahe data already cache mein ho.
-  // Ab agar products already home-load se cache mein hain, unhi se turant render
-  // karte hain (instant, koi network wait nahi); sirf cache khaali ho tabhi fetch.
-  const cachedProds = (window._cachedProds || []).filter(p => p.shop_id === shopId);
-  if (cachedProds.length && sl && shop) {
-    sl.innerHTML = `<button onclick="setHomeMode('stores')" style="background:none;border:none;color:var(--p);font-weight:700;cursor:pointer;margin-bottom:.75rem;font-size:.85rem">← Wapas Stores pe</button>` + renderShopCard(shop, cachedProds);
-    return;
-  }
-  const res = await api('GET', '/api/shops/' + shopId + '/products');
-  const prods = res.products || [];
-  if (sl && shop) {
-    sl.innerHTML = `<button onclick="setHomeMode('stores')" style="background:none;border:none;color:var(--p);font-weight:700;cursor:pointer;margin-bottom:.75rem;font-size:.85rem">← Wapas Stores pe</button>` + renderShopCard(shop, prods);
-  }
-}
 
 function filterShopOrders(status, btn) {
   // Highlight active button
