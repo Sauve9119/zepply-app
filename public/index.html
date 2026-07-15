@@ -385,7 +385,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   <div class="div"></div>
   <div id="cart-sum"></div>
   <div style="margin:.6rem 0">
-    <div class="fl ic g1"><input id="cpn-inp" placeholder="Coupon code (try SAVE10)" style="flex:1"><button class="btn bp bsm" onclick="applyCoupon()">Apply</button></div>
+    <div class="fl ic g1"><input id="cpn-inp" placeholder="Coupon code (try WELCOME)" style="flex:1"><button class="btn bp bsm" onclick="applyCoupon()">Apply</button></div>
     <div id="cpn-msg" style="font-size:.72rem;margin-top:.25rem"></div>
   </div>
   <div class="fg mt1">
@@ -426,7 +426,7 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
 <div class="mo" id="m-rate"><div class="ms"><div class="mh"></div>
   <h2 class="st">⭐ Rate Your Order</h2>
   <div style="text-align:center;padding:.75rem 0">
-    <div style="font-size:.88rem;margin-bottom:.85rem">How was your experience?</div>
+    <div style="font-size:.88rem;margin-bottom:.85rem">🏪 Shop kaisi thi?</div>
     <div id="stars" style="display:flex;justify-content:center;gap:.3rem;margin-bottom:.85rem;font-size:1.6rem;cursor:pointer">
       <span onclick="setRating(1)" id="st1">☆</span><span onclick="setRating(2)" id="st2">☆</span><span onclick="setRating(3)" id="st3">☆</span><span onclick="setRating(4)" id="st4">☆</span><span onclick="setRating(5)" id="st5">☆</span>
     </div>
@@ -440,6 +440,15 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
       </div>
     </div>
     <div class="fg"><label>Comment (optional)</label><textarea rows="2" id="rev-comment" placeholder="Tell us more..."></textarea></div>
+    <!-- FIX: pehle sirf shop rate ho sakti thi — delivery partner ko kabhi
+         rate karne ka option hi nahi tha. Ab dono ek saath. -->
+    <div style="border-top:1px solid var(--b);margin:.85rem 0;padding-top:.85rem">
+      <div style="font-size:.88rem;margin-bottom:.85rem">🏍️ Delivery partner kaisa tha?</div>
+      <div id="dl-stars" style="display:flex;justify-content:center;gap:.3rem;margin-bottom:.5rem;font-size:1.6rem;cursor:pointer">
+        <span onclick="setDlRating(1)" id="dst1">☆</span><span onclick="setDlRating(2)" id="dst2">☆</span><span onclick="setDlRating(3)" id="dst3">☆</span><span onclick="setDlRating(4)" id="dst4">☆</span><span onclick="setDlRating(5)" id="dst5">☆</span>
+      </div>
+      <div class="fg"><textarea rows="2" id="dl-comment" placeholder="Delivery partner ke baare mein (optional)..."></textarea></div>
+    </div>
     <button class="btn bp bblk" onclick="submitReview()">Submit → +25 ZepCoins</button>
   </div>
 </div></div>
@@ -871,7 +880,7 @@ login: async () => `
 
 // CUSTOMER HOME
 home: async () => {
-  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null}),{timeout:6000}) : r({lat:null,lng:null}));
+  const myCoords = await new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p=>r({lat:p.coords.latitude,lng:p.coords.longitude}),()=>r({lat:null,lng:null}),{timeout:3000,maximumAge:300000}) : r({lat:null,lng:null}));
   window._myCoords = myCoords; // checkout ke time order lat/lng bhejne ke liye
   const locParam = myCoords.lat ? '?lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=10' : '';
   const [shopsRes, allProdsRes] = await Promise.all([
@@ -899,13 +908,20 @@ home: async () => {
     // app jaisa nahi tha). Ab reverse-geocode karke actual area/locality naam
     // dikhate hain, address field mein bhi auto-fill kar dete hain.
     if (lbl) lbl.textContent = '📍 Location detect ho gayi...';
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${myCoords.lat}&lon=${myCoords.lng}&zoom=16`)
+    // FIX: pehle zoom=16 tha aur `road` field kabhi check hi nahi hoti thi —
+    // isliye hamesha broad administrative naam (jaise "Jaipur Municipal
+    // Corporation") dikhta tha, asli sadak/locality (jaise "Agra Road") nahi.
+    // Ab zoom=18 (max detail) hai aur road ko priority mein rakha hai.
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${myCoords.lat}&lon=${myCoords.lng}&zoom=18&addressdetails=1`)
       .then(r => r.json())
       .then(data => {
         const a = data.address || {};
-        const areaName = a.suburb || a.neighbourhood || a.village || a.town || a.city_district || a.city || 'Current Location';
+        const locality = a.suburb || a.neighbourhood || a.village || a.hamlet || '';
+        const roadName = a.road || a.pedestrian || '';
         const cityName = a.city || a.town || a.state_district || '';
-        const shortAddr = [areaName, cityName].filter(Boolean).join(', ');
+        // Priority: "Road, Locality" agar dono mil jaye, warna jo mile
+        const primary = [roadName, locality].filter(Boolean).join(', ') || a.city_district || cityName || 'Current Location';
+        const shortAddr = primary === cityName ? primary : [primary, cityName].filter((v,i,arr)=>v && arr.indexOf(v)===i).join(', ');
         if (lbl) lbl.textContent = '📍 ' + (shortAddr || 'Current Location');
         window._detectedAddress = data.display_name || shortAddr;
         const addrField = document.getElementById('delivery-address');
@@ -972,7 +988,7 @@ home: async () => {
   <div id="stores-list">
     ${shops.length === 0 ?
       '<div class="card" style="text-align:center;padding:2rem"><div style="font-size:3rem">🏪</div><div class="fw7 mt1">Aapke area mein abhi koi shop nahi</div><div class="tsm tm mt1">Jald hi shops add hongi</div></div>' :
-      shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('')
+      renderStoreListHTML(_homeMode, shops, allProds)
     }
   </div>
   `;
@@ -1054,15 +1070,17 @@ orders: async () => {
 rewards: async () => {
   const res = await api('GET', '/api/loyalty/balance');
   const pts = res.points || 0, tier = res.tier || 'bronze', nextTier = res.next_tier, toNext = res.points_to_next_tier || 0;
+  const valueRs = res.value_rupees != null ? res.value_rupees : (pts/100);
   const history = res.history || [];
   const tierColor = {bronze:'#CD7F32',silver:'#C0C0C0',gold:'#FFD700',platinum:'#E5E4E2'}[tier] || '#CD7F32';
   const tierEmoji = {bronze:'🥉',silver:'🥈',gold:'🥇',platinum:'💎'}[tier] || '🥉';
   return `
   <div class="lcard mb2">
-    <div class="fl ic jb"><div><div class="txs" style="opacity:.8">Your ZepCoins</div><div style="font-size:2.2rem;font-weight:900">${pts.toLocaleString()} 🪙</div></div>
+    <div class="fl ic jb"><div><div class="txs" style="opacity:.8">Your ZepCoins</div><div style="font-size:2.2rem;font-weight:900">${pts.toLocaleString()} 🪙</div><div class="txs" style="opacity:.8;margin-top:2px">≈ ₹${valueRs.toFixed(2)} · ${res.conversion_rate || '100 ZepCoins = ₹1'}</div></div>
     <div style="text-align:right"><div class="ltier" style="background:rgba(255,255,255,.25)">${tierEmoji} ${tier.toUpperCase()}</div>
     ${nextTier?`<div class="txs mt1" style="opacity:.8">${toNext} coins to ${nextTier}</div>`:''}</div></div>
     ${nextTier?`<div class="pb mt2"><div class="pf" style="width:${Math.min(100,Math.round(100-(toNext/({silver:1000,gold:3000,platinum:10000}[nextTier]||1000))*100))}%"></div></div>`:''}</div>
+  <div class="card" style="background:var(--al);margin-bottom:.75rem;padding:.6rem .85rem"><div class="txs tm">💡 Har order pe ${res.earn_rate_pct||5}% cashback ZepCoins mein milta hai — 100 ZepCoins = ₹1</div></div>
   <h2 class="st">🎁 Redeem Rewards</h2>
   <div class="g2c mb2">
     ${[{type:'discount_50',c:500,label:'₹50 Off',desc:'500 coins se'},{type:'free_delivery',c:1000,label:'Free Delivery ×5',desc:'1000 coins se'},{type:'discount_200',c:1500,label:'₹200 Off',desc:'1500 coins se'},{type:'scratch_card',c:100,label:'Scratch Card',desc:'100 coins se'}].map(r=>`
@@ -1212,13 +1230,13 @@ sproducts: async () => {
     <button class="btn bp bblk mt2" onclick="showScreen('dash')">Dashboard pe Jao</button>
   </div>`;
   const shopId = myShop.id;
-  const res = await api('GET', '/api/shops/' + shopId + '/products');
+  const res = await api('GET', '/api/shops/' + shopId + '/products/mine');
   const prods = res.products || [];
   return `
     <div class="fl ic jb mb1"><h2 class="st" style="margin:0">🏷️ Products</h2>
     <button class="btn bp bsm" onclick="toggleAddForm()">+ Add</button></div>
     <div id="add-form" style="display:none" class="card card-lg mb2">
-      <h2 class="st">Add Product</h2>
+      <h2 class="st" id="add-form-title">Add Product</h2>
       <div class="g2c"><div class="fg"><label>Name</label><input id="np-name" placeholder="Product name"></div>
       <div class="fg"><label>Category</label><select id="np-cat"><option>Pulses</option><option>Rice</option><option>Oil</option><option>Vegetables</option><option>Hardware</option><option>Stationery</option><option>Wholesale</option></select></div></div>
       <div class="g2c"><div class="fg"><label>Price (₹)</label><input type="number" id="np-price" placeholder="125"></div>
@@ -1236,10 +1254,10 @@ sproducts: async () => {
           <div class="fl ic jb"><span class="fw7 tsm">${p.name}</span>${p.discount>0?`<span class="tag tr">${p.discount}% OFF</span>`:'<span class="tag tg">Normal</span>'}</div>
           <div class="tsm tm">${p.unit} · Stock: ${p.stock}</div>
           <div class="fl ic jb mt1">
-            <div><span style="color:var(--a);font-weight:700">₹${p.price}</span>${p.discount>0?`<span class="txs tt" style="text-decoration:line-through;margin-left:.25rem">₹${p.mrp}</span>`:''}</div>
+            <div><span style="color:var(--a);font-weight:700">₹${p.price}</span>${p.discount>0?`<span class="txs tt" style="text-decoration:line-through;margin-left:.25rem">₹${p.mrp}</span>`:''}<div class="txs tt">Customer ko dikhega: ₹${Math.round(p.price*1.05)}</div></div>
             <div class="fl g1">
-              <button class="btn bo bsm" onclick="showToast('✏️ Edit mode: ${p.name}')">✏️</button>
-              <button class="btn bo bsm" onclick="showToast('📦 Stock updated!')">📦</button>
+              <button class="btn bo bsm" onclick="editProduct('${p.id}')">✏️</button>
+              <button class="btn bo bsm" onclick="quickUpdateStock('${p.id}', ${p.stock})">📦</button>
               <button class="btn bsm" style="background:var(--dl);color:var(--d);border:none" onclick="deleteProduct('${p.id}')">🗑</button>
             </div>
           </div>
@@ -1552,7 +1570,7 @@ async function openCart() {
     <div class="fl ic jb tsm mt1"><span>Delivery</span><span style="color:var(--a)">${del === 0 ? 'FREE' : '₹' + del}</span></div>
     ${discHtml}<div class="div"></div>
     <div class="fl ic jb fw7"><span>Total</span><span>₹${sub + del - disc}</span></div>
-    <div class="tsm" style="color:var(--g);margin-top:.3rem">You'll earn ~${Math.floor((sub+del-disc)/10)} ZepCoins ⭐</div>`;
+    <div class="tsm" style="color:var(--g);margin-top:.3rem">You'll earn ~${Math.floor((sub+del-disc)*5)} ZepCoins (5% cashback) ⭐</div>`;
   openModal('m-cart');
 }
 
@@ -1673,6 +1691,46 @@ async function reorder(productIds) {
 // FILTERS
 // ════════════════════════════════════════════
 let _homeMode = 'products';
+// FIX: pehle ye logic seedha setHomeMode() ke andar hardcoded thi, aur initial
+// home() render + filterCat() dono iske bina apna alag (hamesha shop-grouped)
+// HTML banate the — isliye "Product" mode select karne pe bhi kabhi products
+// nahi dikhte the. Ab sab jagah yehi ek function use hota hai, taaki teeno
+// jagah (initial load, toggle click, category filter) hamesha sync mein rahein.
+function renderStoreListHTML(mode, shops, allProds) {
+  if (mode === 'stores') {
+    return shops.length ? shops.map(s => `
+      <div class="card" style="display:flex;align-items:center;gap:.85rem;cursor:pointer" onclick="openStoreProducts('${s.id}','${s.name.replace(/'/g,'')}')" >
+        <div style="width:52px;height:52px;background:var(--pl);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${s.emoji||'🏪'}</div>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:.92rem">${s.name}</div>
+          <div style="font-size:.72rem;color:var(--t2);margin-top:2px">${s.category} · ${s.distance_km||'~0.5'}km · ⭐${s.rating||'New'}</div>
+          <div style="font-size:.7rem;color:var(--t3);margin-top:2px">${s.address||''}</div>
+        </div>
+        <div style="color:var(--p);font-size:1.2rem">›</div>
+      </div>`).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi store nahi mila</div>';
+  }
+  // Product mode: flat product-first grid, dukaan ka naam chota sa side mein
+  const shopById = {};
+  shops.forEach(s => shopById[s.id] = s);
+  const visibleProds = allProds.filter(p => shopById[p.shop_id]); // sirf nearby shops ke products
+  if (!visibleProds.length) return '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi product nahi mila</div>';
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">` + visibleProds.map(p => {
+    const shop = shopById[p.shop_id];
+    return `<div class="card" style="padding:.6rem">
+      <div style="width:100%;aspect-ratio:1;background:var(--s3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin-bottom:.4rem;overflow:hidden">${p.image_url?`<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<span style=font-size:1.8rem>📦</span>'">`:(p.emoji||'📦')}</div>
+      <div style="font-weight:700;font-size:.82rem;line-height:1.2">${esc(p.name)}</div>
+      <div style="font-size:.65rem;color:var(--t3);margin-top:2px">🏪 ${esc(shop?.name||'')}</div>
+      <div style="font-size:.68rem;color:var(--t2);margin-top:1px">${p.unit||''}${p.stock>0&&p.stock<5?' · <span style="color:var(--d);font-weight:600">Only '+p.stock+' left</span>':''}${p.stock===0?' · <span style="color:var(--t3)">Out of stock</span>':''}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem">
+        <div>
+          <span style="font-weight:800;font-size:.88rem">₹${p.price}</span>
+          ${p.discount>0?`<span style="font-size:.68rem;color:var(--t3);text-decoration:line-through;margin-left:4px">₹${p.mrp}</span>`:''}
+        </div>
+        <div id="c-${p.id}">${p.stock===0?'':renderAddBtn(p)}</div>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
 function setHomeMode(mode) {
   _homeMode = mode;
   const pb = document.getElementById('mode-products');
@@ -1683,60 +1741,26 @@ function setHomeMode(mode) {
     sb.style.background = mode==='stores' ? 'var(--p)' : 'transparent';
     sb.style.color = mode==='stores' ? '#fff' : 'var(--t2)';
   }
-  const sl = document.getElementById('shop-list');
+  const sl = document.getElementById('stores-list');
   if (!sl) return;
-  if (mode === 'stores') {
-    // Store mode: show store cards only, no products
-    const shops = window._cachedShops || [];
-    sl.innerHTML = shops.length ? shops.map(s => `
-      <div class="card" style="display:flex;align-items:center;gap:.85rem;cursor:pointer" onclick="openStoreProducts('${s.id}','${s.name.replace(/'/g,'')}')" >
-        <div style="width:52px;height:52px;background:var(--pl);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${s.emoji||'🏪'}</div>
-        <div style="flex:1">
-          <div style="font-weight:800;font-size:.92rem">${s.name}</div>
-          <div style="font-size:.72rem;color:var(--t2);margin-top:2px">${s.category} · ${s.distance_km||'~0.5'}km · ⭐${s.rating||'New'}</div>
-          <div style="font-size:.7rem;color:var(--t3);margin-top:2px">${s.address||''}</div>
-        </div>
-        <div style="color:var(--p);font-size:1.2rem">›</div>
-      </div>`).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi store nahi mila</div>';
-  } else {
-    // FIX: pehle "product mode" bhi shop-grouped cards hi dikhata tha (store mode
-    // jaisa hi lagta tha), aur agar kisi product ka emoji missing ho toh
-    // renderShopCard() ke andar `chr(128230)` call hoti thi jo kabhi define hi
-    // nahi hui thi — ye poore listing ko crash kar deta tha (ReferenceError).
-    // Ab product mode ek flat product-first grid hai, dukaan ka naam sirf chota
-    // sa side mein — jaisa maanga gaya tha.
-    const shops = window._cachedShops || [];
-    const allProds = window._cachedProds || [];
-    const shopById = {};
-    shops.forEach(s => shopById[s.id] = s);
-    const visibleProds = allProds.filter(p => shopById[p.shop_id]); // sirf nearby shops ke products
-    sl.innerHTML = visibleProds.length ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">` + visibleProds.map(p => {
-      const shop = shopById[p.shop_id];
-      return `<div class="card" style="padding:.6rem">
-        <div style="width:100%;aspect-ratio:1;background:var(--s3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin-bottom:.4rem;overflow:hidden">${p.image_url?`<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<span style=font-size:1.8rem>📦</span>'">`:(p.emoji||'📦')}</div>
-        <div style="font-weight:700;font-size:.82rem;line-height:1.2">${esc(p.name)}</div>
-        <div style="font-size:.65rem;color:var(--t3);margin-top:2px">🏪 ${esc(shop?.name||'')}</div>
-        <div style="font-size:.68rem;color:var(--t2);margin-top:1px">${p.unit||''}${p.stock>0&&p.stock<5?' · <span style="color:var(--d);font-weight:600">Only '+p.stock+' left</span>':''}${p.stock===0?' · <span style="color:var(--t3)">Out of stock</span>':''}</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem">
-          <div>
-            <span style="font-weight:800;font-size:.88rem">₹${p.price}</span>
-            ${p.discount>0?`<span style="font-size:.68rem;color:var(--t3);text-decoration:line-through;margin-left:4px">₹${p.mrp}</span>`:''}
-          </div>
-          <div id="c-${p.id}">${p.stock===0?'':renderAddBtn(p)}</div>
-        </div>
-      </div>`;
-    }).join('') + `</div>` : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi product nahi mila</div>';
-    sl.innerHTML = shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('') || '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">Koi product nahi mila</div>';
-  }
+  sl.innerHTML = renderStoreListHTML(mode, window._cachedShops || [], window._cachedProds || []);
 }
 
 async function openStoreProducts(shopId, shopName) {
-  const sl = document.getElementById('shop-list');
-  if (sl) sl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--t3)">Loading...</div>';
-  const res = await api('GET', '/api/shops/' + shopId + '/products');
-  const prods = res.products || [];
+  const sl = document.getElementById('stores-list');
   const shops = window._cachedShops || [];
   const shop = shops.find(s => s.id === shopId);
+  // FIX: pehle yahan hamesha fresh API call hoti thi aur turant "Loading..."
+  // dikha ke poora content clear ho jaata tha — chahe data already cache mein ho.
+  // Ab agar products already home-load se cache mein hain, unhi se turant render
+  // karte hain (instant, koi network wait nahi); sirf cache khaali ho tabhi fetch.
+  const cachedProds = (window._cachedProds || []).filter(p => p.shop_id === shopId);
+  if (cachedProds.length && sl && shop) {
+    sl.innerHTML = `<button onclick="setHomeMode('stores')" style="background:none;border:none;color:var(--p);font-weight:700;cursor:pointer;margin-bottom:.75rem;font-size:.85rem">← Wapas Stores pe</button>` + renderShopCard(shop, cachedProds);
+    return;
+  }
+  const res = await api('GET', '/api/shops/' + shopId + '/products');
+  const prods = res.products || [];
   if (sl && shop) {
     sl.innerHTML = `<button onclick="setHomeMode('stores')" style="background:none;border:none;color:var(--p);font-weight:700;cursor:pointer;margin-bottom:.75rem;font-size:.85rem">← Wapas Stores pe</button>` + renderShopCard(shop, prods);
   }
@@ -1768,11 +1792,13 @@ async function filterCat(el, cat) {
     sl.innerHTML = items.length ? `<div class="spg">${items.map(w=>`<div class="spc"><div class="simg">${w.product?.emoji||'📦'}${w.product?.discount>0?`<div class="dbadge">${w.product.discount}% OFF</div>`:''}</div><div class="spi"><div class="spn">${w.product?.name}</div><div style="font-size:.65rem;color:var(--t3)">${w.product?.unit} · ${w.shop_name}</div><div class="spp mt1"><span class="snow">₹${w.product?.price}</span>${w.product?.discount>0?`<span class="swas">₹${w.product?.mrp}</span>`:''}</div><button class="btn ba bsm mt1" style="width:100%" onclick="addCart('${w.product_id}',${w.product?.price},'${esc(w.product?.name)}','${w.product?.emoji||'📦'}','${w.product?.shop_id}','${esc(w.shop_name)}')">Add +</button></div></div>`).join('')}</div>` : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">❤️ No wishlisted items yet</div>';
     return;
   }
-  const res = await api('GET', `/api/shops?category=${encodeURIComponent(cat)}${myCoords?.lat ? '&lat='+myCoords.lat+'&lng='+myCoords.lng+'&radius=10' : ''}`);
+  const res = await api('GET', `/api/shops?category=${encodeURIComponent(cat)}${window._myCoords?.lat ? '&lat='+window._myCoords.lat+'&lng='+window._myCoords.lng+'&radius=10' : ''}`);
   const shops = res.shops || [];
   const prodsRes = await api('GET', '/api/shops/all/products');
   const allProds = prodsRes.products || [];
-  sl.innerHTML = shops.length ? shops.map(s => renderShopCard(s, allProds.filter(p=>p.shop_id===s.id))).join('') : '<div class="card" style="text-align:center;padding:1.5rem;color:var(--t3)">No stores in this category nearby</div>';
+  window._cachedShops = shops;
+  window._cachedProds = allProds;
+  sl.innerHTML = renderStoreListHTML(_homeMode, shops, allProds);
 }
 
 async function filterProds(q) {
@@ -2020,18 +2046,30 @@ function setRating(n) {
     if (s) s.textContent = i <= n ? '⭐' : '☆';
   }
 }
+let myDlRating = 0;
+function setDlRating(n) {
+  myDlRating = n;
+  for (let i = 1; i <= 5; i++) {
+    const s = document.getElementById('dst' + i);
+    if (s) s.textContent = i <= n ? '⭐' : '☆';
+  }
+}
 
 async function submitReview() {
   if (!myRating) { showToast('Please select a rating'); return; }
   const comment = document.getElementById('rev-comment')?.value || '';
+  const dlComment = document.getElementById('dl-comment')?.value || '';
   const orderId = currentOrderId || 'ord1';
   const orderRes = await api('GET', '/api/orders/' + orderId);
     const shopId4Review = orderRes.order?.items?.[0]?.shop_id || '';
-    const res = await api('POST', '/api/reviews', { order_id: orderId, shop_id: shopId4Review, rating: myRating, comment, review_type: 'text' });
+    const res = await api('POST', '/api/reviews', {
+      order_id: orderId, shop_id: shopId4Review, rating: myRating, comment, review_type: 'text',
+      delivery_rating: myDlRating > 0 ? myDlRating : null, delivery_comment: dlComment
+    });
   if (res.success || res.message?.includes('Already')) {
     showToast(res.success ? `✅ Review submitted! +${res.points_earned} ZepCoins` : res.message);
     closeModal('m-rate');
-    myRating = 0;
+    myRating = 0; myDlRating = 0;
   } else { showToast('❌ ' + res.message); }
 }
 
@@ -2127,7 +2165,54 @@ function calcDlEarn(d) {
 // ════════════════════════════════════════════
 // SHOP OWNER ACTIONS
 // ════════════════════════════════════════════
-function toggleAddForm() { const f = document.getElementById('add-form'); if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none'; }
+async function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  if (!f) return;
+  const opening = f.style.display === 'none';
+  if (opening) { window._editingProductId = null; clearProductForm(); document.getElementById('add-form-title').textContent = 'Add Product'; }
+  f.style.display = opening ? 'block' : 'none';
+}
+function clearProductForm() {
+  ['np-name','np-price','np-mrp','np-unit','np-stock'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  const emoji = document.getElementById('np-emoji'); if (emoji) emoji.value = '📦';
+  const cat = document.getElementById('np-cat'); if (cat) cat.value = 'Pulses';
+}
+// FIX: pehle ✏️ button sirf ek toast dikhata tha ("Edit mode: X"), koi asli
+// edit form nahi khulta tha, aur 📦 stock button bhi sirf fake toast tha. Ab
+// dono real functionality hain — Add Product form ko hi edit mode mein reuse
+// karte hain, prefilled fields ke saath.
+async function editProduct(id) {
+  const shopsR = await api('GET', '/api/shops');
+  const myShop = (shopsR.shops || []).find(s => s.owner_id === user?.id);
+  if (!myShop) return showToast('Shop nahi mili');
+  const prodsR = await api('GET', `/api/shops/${myShop.id}/products/mine`);
+  const p = (prodsR.products || []).find(x => x.id === id);
+  if (!p) return showToast('Product nahi mila');
+  window._editingProductId = id;
+  document.getElementById('np-name').value = p.name;
+  document.getElementById('np-cat').value = p.category;
+  document.getElementById('np-price').value = p.price;
+  document.getElementById('np-mrp').value = p.mrp;
+  document.getElementById('np-unit').value = p.unit;
+  document.getElementById('np-stock').value = p.stock;
+  document.getElementById('np-emoji').value = p.emoji || '📦';
+  document.getElementById('add-form-title').textContent = 'Edit Product';
+  const f = document.getElementById('add-form');
+  f.style.display = 'block';
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+async function quickUpdateStock(id, currentStock) {
+  const val = prompt('Naya stock kitna hai?', currentStock);
+  if (val === null) return;
+  const stock = parseInt(val, 10);
+  if (isNaN(stock) || stock < 0) return showToast('Valid number daalo');
+  const shopsR = await api('GET', '/api/shops');
+  const myShop = (shopsR.shops || []).find(s => s.owner_id === user?.id);
+  if (!myShop) return showToast('Shop nahi mili');
+  const res = await api('PUT', `/api/shops/${myShop.id}/products/${id}`, { stock });
+  if (res.success) { showToast('✅ Stock updated!'); showScreen('sproducts'); }
+  else showToast('❌ ' + (res.message || 'Error'));
+}
 async function saveProduct() {
   const name = document.getElementById('np-name')?.value;
   const price = document.getElementById('np-price')?.value;
@@ -2135,14 +2220,18 @@ async function saveProduct() {
   const shopsR = await api('GET', '/api/shops');
   const myShop = (shopsR.shops || []).find(s => s.owner_id === user?.id);
   if (!myShop) return showToast('Shop nahi mili');
-  const res = await api('POST', `/api/shops/${myShop.id}/products`, {
+  const payload = {
     name, category: document.getElementById('np-cat')?.value || 'General',
     unit: document.getElementById('np-unit')?.value || 'pc',
     price: +price, mrp: +(document.getElementById('np-mrp')?.value || price),
     emoji: document.getElementById('np-emoji')?.value || '📦',
     stock: +(document.getElementById('np-stock')?.value || 0), discount: 0
-  });
-  if (res.success) { showToast('✅ Product added!'); showScreen('sproducts'); }
+  };
+  const editingId = window._editingProductId;
+  const res = editingId
+    ? await api('PUT', `/api/shops/${myShop.id}/products/${editingId}`, payload)
+    : await api('POST', `/api/shops/${myShop.id}/products`, payload);
+  if (res.success) { showToast(editingId ? '✅ Product updated!' : '✅ Product added!'); window._editingProductId = null; showScreen('sproducts'); }
   else showToast('❌ ' + (res.message || 'Error'));
 }
 async function deleteProduct(id) {
