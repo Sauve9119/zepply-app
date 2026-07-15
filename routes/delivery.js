@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
-const { DELIVERY_PARTNER_PAYOUT_RS } = require('../middleware/pricing');
+const { calcPartnerPayout } = require('../middleware/pricing');
 
 // GET /api/delivery/profile
 router.get('/profile', auth, requireRole('delivery'), (req, res) => {
@@ -78,7 +78,9 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   // Collect drops
   const drops = orders.map(o => {
     const user = db.findById('users', o.user_id);
-    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: DELIVERY_PARTNER_PAYOUT_RS };
+    // FIX: earning fix DELIVERY_PARTNER_PAYOUT_RS nahi — order banate waqt hi
+    // distance ke hisaab se calculate ho chuka payout use karte hain.
+    return { type: 'drop', order_id: o.id, name: user?.name, address: o.address, lat: null, lng: null, phone: user?.phone, earning: o.delivery_partner_payout ?? calcPartnerPayout(null) };
   });
 
   // Simple TSP: sort pickups by proximity to current location, then drops
@@ -86,7 +88,7 @@ router.get('/route', auth, requireRole('delivery'), (req, res) => {
   const allStops = [...pickups, ...drops];
   const totalDist = (allStops.length * 0.6).toFixed(1);
   const totalTime = Math.ceil(allStops.length * 5) + ' min';
-  const totalEarning = drops.length * DELIVERY_PARTNER_PAYOUT_RS;
+  const totalEarning = drops.reduce((sum, d) => sum + d.earning, 0);
 
   res.json({
     success: true,
@@ -116,8 +118,11 @@ router.get('/earnings', auth, requireRole('delivery'), (req, res) => {
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
 
+  // FIX: pehle today ki earning "deliveries * flat rate" se nikalti thi. Ab har
+  // order ka apna distance-based payout hai, isliye actual amounts sum karte hain.
+  const todayBase = todayOrders.reduce((sum, o) => sum + (o.delivery_partner_payout ?? calcPartnerPayout(null)), 0);
   const earnings = {
-    today: { deliveries: todayOrders.length, base: todayOrders.length * DELIVERY_PARTNER_PAYOUT_RS, bonus: 0, tips: 0, total: todayOrders.length * DELIVERY_PARTNER_PAYOUT_RS },
+    today: { deliveries: todayOrders.length, base: todayBase, bonus: 0, tips: 0, total: todayBase },
     month: { deliveries: dp.total_deliveries, total: dp.total_earnings, avg_per_delivery: dp.total_deliveries > 0 ? Math.round(dp.total_earnings / dp.total_deliveries) : 0 },
     daily_target: { target: 20, current: todayOrders.length, bonus_on_completion: 200 },
     rating: dp.rating || 0,
