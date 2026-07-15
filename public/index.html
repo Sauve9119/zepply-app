@@ -1542,7 +1542,7 @@ function getCount() { return Object.values(cart).reduce((s, i) => s + i.qty, 0);
 // wahi values hain, taaki cart mein jo estimate dikhe wo checkout ke waqt
 // server jo actual charge lagayega usse match kare. Server hi final source
 // of truth hai — ye sirf UI preview ke liye hai.
-const DELIVERY_BASE_KM = 2, DELIVERY_BASE_CHARGE_RS = 20, DELIVERY_PER_KM_RS = 8, DEFAULT_DELIVERY_DISTANCE_KM = 3;
+const DELIVERY_BASE_KM = 2, DELIVERY_BASE_CHARGE_RS = 20, DELIVERY_PER_KM_RS = 8, DEFAULT_DELIVERY_DISTANCE_KM = 2;
 function haversineKmGlobal(lat1, lng1, lat2, lng2) {
   const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
