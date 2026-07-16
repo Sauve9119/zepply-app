@@ -384,10 +384,6 @@ label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:.22rem;disp
   <div id="cart-items"></div>
   <div class="div"></div>
   <div id="cart-sum"></div>
-  <div style="margin:.6rem 0">
-    <div class="fl ic g1"><input id="cpn-inp" placeholder="Coupon code (try WELCOME)" style="flex:1"><button class="btn bp bsm" onclick="applyCoupon()">Apply</button></div>
-    <div id="cpn-msg" style="font-size:.72rem;margin-top:.25rem"></div>
-  </div>
   <div class="fg mt1">
     <div class="fl ic jb mb1"><label style="margin:0">📍 Delivery Address</label><span style="font-size:.72rem;color:var(--p);cursor:pointer" onclick="showAddressPicker()">📋 Saved addresses</span></div>
     <textarea id="delivery-address" rows="2" placeholder="Ghar/dukaan ka pura pata likho..." style="resize:none"></textarea>
@@ -682,17 +678,25 @@ function urlBase64ToUint8Array(base64String) {
 function playOrderSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Blinkit style — 3 quick ascending beeps
-    [[0, 880, 0.15], [0.15, 1100, 0.15], [0.3, 1320, 0.2]].forEach(([t, freq, dur]) => {
+    // Zomato/Blinkit style — two rounds of ascending beeps, louder + longer so it
+    // actually cuts through background noise for shop owners and delivery partners
+    const notes = [
+      [0, 880, 0.16], [0.16, 1100, 0.16], [0.32, 1320, 0.22],
+      [0.75, 880, 0.16], [0.91, 1100, 0.16], [1.07, 1320, 0.26]
+    ];
+    notes.forEach(([t, freq, dur]) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.frequency.value = freq; o.type = 'sine';
-      g.gain.setValueAtTime(0.3, ctx.currentTime + t);
+      g.gain.setValueAtTime(0.001, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + t + 0.03);
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
       o.start(ctx.currentTime + t);
       o.stop(ctx.currentTime + t + dur + 0.05);
     });
+    // Buzz the phone too, if supported (delivery partner ke liye especially useful)
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
   } catch(e) {}
 }
 
@@ -701,7 +705,7 @@ let _shopPollTimer = null;
 function startShopOrderPolling() {
   if (_shopPollTimer) clearInterval(_shopPollTimer);
   if (!user || user.role !== 'shopowner') return;
-  setInterval(async () => {
+  _shopPollTimer = setInterval(async () => {
     try {
       const r = await api('GET', '/api/orders');
       const orders = r.orders || [];
@@ -1067,7 +1071,7 @@ orders: async () => {
       <div class="fl ic jb mt1">
         <span class="txs tt">${new Date(o.created_at).toLocaleDateString('en-IN')}</span>
         <div class="fl g1 ic">
-          ${o.status!=='cancelled'?`<span class="txs tw">+${o.loyalty_earned} coins</span>`:''}
+          ${o.status!=='cancelled' && o.loyalty_earned>0?`<span class="txs tw">+${o.loyalty_earned} coins</span>`:''}
           <span class="fw7 tsm" style="color:var(--a)">₹${o.total}</span>
           <button class="btn bo bsm" onclick="reorder(${JSON.stringify(o.items?.map(i=>i.product_id)).replace(/"/g,"'")})">Reorder</button>
         </div>
@@ -1616,8 +1620,7 @@ async function openCart() {
   sl.innerHTML = `<div class="fl ic jb tsm"><span>Subtotal</span><span>₹${sub}</span></div>
     <div class="fl ic jb tsm mt1"><span>Delivery</span><span style="color:var(--a)">${del === 0 ? 'FREE' : '₹' + del}</span></div>
     ${discHtml}<div class="div"></div>
-    <div class="fl ic jb fw7"><span>Total</span><span>₹${sub + del - disc}</span></div>
-    <div class="tsm" style="color:var(--g);margin-top:.3rem">You'll earn ~${Math.floor((sub+del-disc)*5)} ZepCoins (5% cashback) ⭐</div>`;
+    <div class="fl ic jb fw7"><span>Total</span><span>₹${sub + del - disc}</span></div>`;
   openModal('m-cart');
 }
 
@@ -2591,6 +2594,12 @@ function connectWS() {
           showToast(prefix + (d.message || 'Update'));
           const ndot = document.getElementById('ndot');
           if (ndot) ndot.style.display = 'block';
+
+          // Naya order aane par turant sound — shop owner ko naya customer order milne par,
+          // aur delivery partner ko koi order pickup ke liye available hone par
+          if (d.type === 'new_order' && (role === 'shopowner' || role === 'delivery')) {
+            playOrderSound();
+          }
 
           // Auto-refresh current screen (bina tab badle)
           const cur = document.querySelector('.ni.active')?.id?.replace('ni-', '');
