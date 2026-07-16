@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const db = require('../middleware/db');
 const { auth, requireRole } = require('../middleware/auth');
-const { markupPrice, coinsEarnedForTotal, calcDeliveryCharge, calcPartnerPayout, FREE_DELIVERY_THRESHOLD_RS } = require('../middleware/pricing');
+const { markupPrice, calcDeliveryCharge, calcPartnerPayout, FREE_DELIVERY_THRESHOLD_RS } = require('../middleware/pricing');
 
 // Haversine distance in km between two coordinates
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -369,9 +369,9 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       if (coupon) db.updateById('coupons', coupon.id, { used: (coupon.used || 0) + 1 });
     }
 
-    // FIX: pehle loyalty_earned = total/10 tha (bina kisi documented rate ke).
-    // Ab explicit 5% cashback hai, 100 ZepCoins = ₹1 ki dar se.
-    const loyalty_earned = coinsEarnedForTotal(total);
+    // Order placement par ZepCoins cashback ab nahi diya jata (user request).
+    // Coins ab sirf review, referral, spin aur redeem flows se milte hain.
+    const loyalty_earned = 0;
     const orderId = 'ord' + uuidv4().slice(0, 8);
     const orderShopIds = [...new Set(enrichedItems.map(i => i.shop_id))];
     const estimated_delivery = estimateDeliveryWindow(orderShopIds, lat, lng);
@@ -399,9 +399,11 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
       db.updateById('products', item.product_id, { stock: product.stock - item.qty });
     }
 
-    // Loyalty points
-    db.increment('users', req.user.id, 'loyalty_points', loyalty_earned);
-    db.insert('loyalty_points', { id: 'lp' + uuidv4().slice(0, 8), user_id: req.user.id, points: loyalty_earned, type: 'earn', description: `Order ${orderId}`, created_at: new Date().toISOString() });
+    // Loyalty points (ab order placement se coins nahi milte, isliye sirf tab record karo jab kuch mila ho)
+    if (loyalty_earned > 0) {
+      db.increment('users', req.user.id, 'loyalty_points', loyalty_earned);
+      db.insert('loyalty_points', { id: 'lp' + uuidv4().slice(0, 8), user_id: req.user.id, points: loyalty_earned, type: 'earn', description: `Order ${orderId}`, created_at: new Date().toISOString() });
+    }
 
     // Tier update
     const user = db.findById('users', req.user.id);
@@ -410,9 +412,9 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
     db.updateById('users', req.user.id, { tier });
 
     // Customer notification — DB + WS
-    db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: req.user.id, title: 'Order Confirmed! 🎉', body: `Order #${orderId} confirm hua. +${loyalty_earned} ZepCoins mile!`, read: false, created_at: new Date().toISOString() });
-    req.wsBroadcast(req.user.id, { type: 'order_confirmed', message: `✅ Order #${orderId.slice(-6).toUpperCase()} confirmed! +${loyalty_earned} coins`, order_id: orderId });
-    req.sendPush(req.user.id, 'Order Confirmed! 🎉', `Order #${orderId.slice(-6).toUpperCase()} place hua. +${loyalty_earned} ZepCoins!`, 'order');
+    db.insert('notifications', { id: 'n' + uuidv4().slice(0, 8), user_id: req.user.id, title: 'Order Confirmed! 🎉', body: `Order #${orderId} confirm hua.`, read: false, created_at: new Date().toISOString() });
+    req.wsBroadcast(req.user.id, { type: 'order_confirmed', message: `✅ Order #${orderId.slice(-6).toUpperCase()} confirmed!`, order_id: orderId });
+    req.sendPush(req.user.id, 'Order Confirmed! 🎉', `Order #${orderId.slice(-6).toUpperCase()} place hua.`, 'order');
 
     // Shop owners ko notify karo (jinke products order mein hain)
     const shopIdsInOrder = [...new Set(enrichedItems.map(i => i.shop_id))];
@@ -426,7 +428,7 @@ router.post('/', auth, requireRole('customer'), (req, res) => {
 
     // Delivery partners ko notify NAHI karenge abhi — shop owner accept karne ke baad karenge
 
-    res.status(201).json({ success: true, order, message: `Order place hua! +${loyalty_earned} ZepCoins mile 🌟` });
+    res.status(201).json({ success: true, order, message: `Order place hua! 🌟` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -587,7 +589,7 @@ router.get('/:id/track', auth, (req, res) => {
   const partner = order.delivery_partner_id ? db.findById('users', order.delivery_partner_id) : null;
   const dp = order.delivery_partner_id ? db.findOne('delivery_partners', { user_id: order.delivery_partner_id }) : null;
 
-  res.json({ success: true, order_id: order.id, status: order.status, timeline, estimated_delivery: order.estimated_delivery, delivery_partner: partner ? { name: partner.name, phone: partner.phone, rating: dp?.rating || 4.9, vehicle: dp?.vehicle, lat: dp?.lat || null, lng: dp?.lng || null } : null });
+  res.json({ success: true, order_id: order.id, status: order.status, timeline, estimated_delivery: order.estimated_delivery, delivery_partner: partner ? { name: partner.name, phone: partner.phone, rating: dp?.rating || 4.9, vehicle: dp?.vehicle, lat: dp?.current_lat || null, lng: dp?.current_lng || null } : null });
 });
 
 module.exports = router;
